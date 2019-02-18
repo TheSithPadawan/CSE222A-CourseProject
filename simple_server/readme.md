@@ -24,3 +24,35 @@
 **Meetings:**
 
 1. **2/17  6:30 pm.** @Biomedical Library Building (BLB) Room 107
+
+
+Week 4 specifications : 
+
+ToDO's for Week starting 18 Feb: 
+
+Long term view : 
+1) Implementing our Load Balancing Algorithm
+2) Implementing Server Failure 
+3) Implementing Maximum Connection check 
+4) Caching the popular requests on the LB 
+
+This week 
+1) Designing different types of requests following normal distribution. - Assigned to Rongrong Miao
+
+
+2) Implementing a basic health check pinging the server periodically - Assigned to Saurabh Goyal 
+
+
+3) Modifying the server in a way to serve the heath check requests - Assigned to Jingwu 
+
+
+4) Report Work - Assigned to Jingwu ( to be reviewed and edited by Rongrong Miao)
+
+Midweek Review : 
+Thursday 9.00 PM
+
+Weekly meeting - 
+TBD
+
+Future Extensions : 
+1) Sending back "bandwith" as the health check response
