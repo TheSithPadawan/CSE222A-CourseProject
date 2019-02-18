@@ -14,8 +14,8 @@ to do the work:
 
 connection_count = 0
 upstream_server = {
-    0: "http://127.0.0.1:5000",
-    1: "http://127.0.0.1:5000"
+    0: "http://127.0.0.1:5020",
+    1: "http://127.0.0.1:6000"
     }
 
 class Handler(BaseHTTPRequestHandler):

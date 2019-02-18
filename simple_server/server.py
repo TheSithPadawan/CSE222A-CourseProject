@@ -3,6 +3,7 @@ from queue import Queue
 from http.server import BaseHTTPRequestHandler,HTTPServer
 import json
 import time
+import sys
 
 from worker import QueryWorker, DummyWorker, MonitorWorker
 
@@ -47,7 +48,7 @@ class MyHandler(BaseHTTPRequestHandler):
 class MyServer():
 
     HOST_NAME = 'localhost'
-    PORT_NUMBER = 9000
+    PORT_NUMBER = 0
 
     def start_worker(self, queue):
         start = time.time()
@@ -71,10 +72,11 @@ class MyServer():
         queue.join()
         end = time.time()
 
-    def start_server(self):
+    def start_server(self, port):
+        self.PORT_NUMBER = port
         HOST_NAME = self.HOST_NAME
         PORT_NUMBER = self.PORT_NUMBER
-
+        
         server_class = HTTPServer
         httpd = server_class((HOST_NAME, PORT_NUMBER), MyHandler)
         try:
@@ -84,7 +86,8 @@ class MyServer():
             pass
         httpd.server_close()
 
-queue = Queue()
-server = MyServer()
-server.start_worker(queue)
-server.start_server()
+if __name__ == "__main__":
+    queue = Queue()
+    server = MyServer()
+    server.start_worker(queue)
+    server.start_server(int(sys.argv[1]))
