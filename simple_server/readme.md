@@ -6,7 +6,13 @@
 
 <img src='latency_vs_time.png'>
 
+**Problems:**
 
+1. If the computation time for request is low, the latency mainly comes from http communication
+
+   => We want to amplify the computation latency caused by server load
+
+   => Request latency will always benefit from fewer http requests
 
 **TODOs**:
 
@@ -14,8 +20,6 @@
 2. Design different server load pattern for dummy workers (sin, cos, periodical) **@Rongrong Miao**
 3. Think over more Load Balancing measurement matrix **@ALL**
 4. Simulate network level constrains for load balancer, e.g. maximum connection limit, time out, server failure, and its implementation **@ALL**
-
-
 
 **Meetings:**
 
