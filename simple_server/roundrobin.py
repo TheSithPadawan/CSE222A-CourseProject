@@ -2,6 +2,7 @@ import requests
 import threading
 from http.server import BaseHTTPRequestHandler,HTTPServer
 from socketserver import ThreadingMixIn
+import numpy as np
 
 """
 main program:
@@ -25,7 +26,9 @@ class Handler(BaseHTTPRequestHandler):
         print (threading.currentThread().getName(), "get the request, ready to serve")
         connection_count += 1
         num_server = len(upstream_server)
-        server_id = connection_count % num_server
+        # server_id = connection_count % num_server
+        # for random assignment scheme
+        server_id = np.random.randint(0, num_server)
         addr = upstream_server[server_id]+self.path
         # post the request
         r = requests.get(addr, headers=self.headers)
