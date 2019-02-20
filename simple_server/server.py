@@ -6,7 +6,19 @@ import time
 import sys
 
 from worker import QueryWorker, DummyWorker, MonitorWorker
+from urllib.parse import urlparse
 
+class HttpRequest:
+    body = dict()
+    def __init__(self, path, parameter):
+        self.body['path'] = path
+        self.body['type'] = parameter
+
+"""
+Three types of requests:
+parameter a, b and c 
+request format: http://localhost:port/foo?type=(a, b, c)
+"""
 class MyHandler(BaseHTTPRequestHandler):
         
     def do_GET(self):
@@ -19,24 +31,27 @@ class MyHandler(BaseHTTPRequestHandler):
         }
 
         # print("\n----- Request Start ----->\n")
-        # print("request_path :", self.path)
+        # print("request_path :", self.bpath)
         # print("self.headers :", self.headers)
         # print("<----- Request End -----\n")
         
-        self.send_response(200)
-        self.send_header("Set-Cookie", "foo=bar")
-        self.end_headers()
-
         # [TODO] how to get data sent back to HTTP
         self.handle_one()
 
+        self.send_response(200)
+        self.send_header("Set-Cookie", "foo=bar")
+        self.end_headers()
         # if self.path in paths:
             # self.respond(paths[self.path])
         # else:
             # self.respond({'status': 500})
 
     def handle_one(self):
-        queue.put(self)
+        query = urlparse(self.path).query
+        query_component = dict(qc.split('=') for qc in query.split('&'))
+        type_args = query_component['type']
+        r = HttpRequest(self.path, type_args) 
+        queue.put(r)
 
     def respond(self, json_data):
         # print(json_data)
@@ -65,6 +80,7 @@ class MyServer():
         for x in range(7):
             dworker = DummyWorker(x, 1000)
             dworker.daemon = True
+            
             dworker.start()
             
         # monitor = MonitorWorker()

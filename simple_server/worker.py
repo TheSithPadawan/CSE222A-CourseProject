@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from queue import Queue
 from threading import Thread
 import random
+import numpy as np 
 
 class QueryWorker(Thread):
 
@@ -21,19 +22,30 @@ class QueryWorker(Thread):
             http_obj = self.queue.get()
             try:
                 ts = time.time()
-                delay_time = self.dummy_job()
+                delay_time = 0
+                if http_obj.body['type'] == 'a':
+                    delay_time = self.dummy_job(3)
+                elif http_obj.body['type']== 'b':
+                    delay_time = self.dummy_job(6)
+                else:
+                    delay_time = self.dummy_job(2)
                 # print(http_obj)
                 print('worker delays', delay_time)
                 # http_obj.respond({'delays': delay_time})
                 self.delays.append((ts-self.start_time, delay_time))
             finally:
                 self.queue.task_done()
-    
-    def dummy_job(self):
+
+    """
+    length varies for different type
+    total latency = base latency * random in range [0.85 - 1.51)
+    """
+    def dummy_job(self, length):
         ts = time.time()
         # modify here to adjust run time
-        x = 10**6*2
-        for i in range(x):
+        base = 10**6*length
+        actual = int(base * np.random.uniform(0.85, 1.51))
+        for i in range(actual):
             a = 1
         return time.time()-ts
 
