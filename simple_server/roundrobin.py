@@ -26,14 +26,14 @@ class Handler(BaseHTTPRequestHandler):
         print (threading.currentThread().getName(), "get the request, ready to serve")
         connection_count += 1
         num_server = len(upstream_server)
-        # server_id = connection_count % num_server
+        server_id = connection_count % num_server
         # for random assignment scheme
-        server_id = np.random.randint(0, num_server)
+        #server_id = np.random.randint(0, num_server)
         addr = upstream_server[server_id]+self.path
         # post the request
         r = requests.get(addr, headers=self.headers)
-        self.send_response(r.status_code)
         self.end_headers()
+        self.send_response(r.status_code)
         self.wfile.write(bytes(r.text, 'UTF-8'))
         return
 
