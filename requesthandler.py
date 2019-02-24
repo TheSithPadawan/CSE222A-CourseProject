@@ -35,21 +35,24 @@ class RandomHandler(RequestHandler):
 class RoundRobinHandler(RequestHandler):
     """
      A server has a list of all the unique IP addresses that are associated with the Internet domain name. 
-     When requests for the IP Address associated with the Internet domain name are received, (we could not do this)
-     When requests for the Load Balancer IP Address are received, (we do this instead)
-     the addresses are returned in a rotating sequential manner.
+     The server continuously rotates a list of the services that are bound to it. 
+     When the virtual server receives a request, it assigns the connection to the first service in the list, 
+     and then moves that service to the bottom of the list.
+     [RESOURCE] https://docs.citrix.com/en-us/netscaler/12/load-balancing/load-balancing-customizing-algorithms/roundrobin-method.html
     """
     cnt = 0
 
     def redirect_server_id(self):
+        # [TODO] handle non 0/1 cases
         RoundRobinHandler.cnt += 1
         return RoundRobinHandler.cnt%self.num_server
 
 class LeastConnectionHandler(RequestHandler):
     """
      The Least Connection method does take the current server load into consideration. 
-     The current request goes to the server that is servicing 
-     the least number of active sessions at the current time.
+     The server selects the service with the fewest active connections. 
+     This is the default method, because, in most circumstances, it provides the best performance.
+     [RESOURCE] https://docs.citrix.com/en-us/netscaler/12/load-balancing/load-balancing-customizing-algorithms/leastconnection-method.html
     """
     def redirect_server_id(self):
         # [TODO]
@@ -61,6 +64,18 @@ class ChainedConnectionHandler(RequestHandler):
      All requests are sent to the first server in the chain. 
      If it can’t accept any more requests the next server in the chain is sent all requests, 
      then the third server. And so on.
+     [RESOURCE] https://kemptechnologies.com/glossary/load-balancing-methods/
+    """
+    def redirect_server_id(self):
+        # [TODO]
+        return 0
+
+class LeastPacketsHandler(RequestHandler):
+    """
+     A load balancing virtual server configured to use the least packets method
+     selects the service that has received the fewest packets in the last x seconds.
+     [RESOURCE] https://docs.citrix.com/en-us/netscaler/12/load-balancing/load-balancing-customizing-algorithms/leastpackets-method.html
+     [RESOURCE] MAYBE use psutil.net_io_counters(pernic=False)?
     """
     def redirect_server_id(self):
         # [TODO]
