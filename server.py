@@ -48,21 +48,29 @@ class MyHandler(BaseHTTPRequestHandler):
         query = urlparse(self.path).query
         query_component = dict(qc.split('=') for qc in query.split('&'))
         type_args = query_component['type']
-        if type_args == 'a':
-            delay_time = self.dummy_job(4)
-        elif type_args == 'b':
-            delay_time = self.dummy_job(5)
-        elif type_args == 'c':
-            delay_time = self.dummy_job(6)
+        if type_args == 'hc':
+            delay_time = 0
         else:
-            # health check endpoint
-            delay_time = self.dummy_job(0)
+            delay_time = self.process_request(int(type_args))
         return delay_time
 
     def respond(self, json_data):
         data = json.dumps(json_data)
         self.wfile.write(bytes(data, 'UTF-8'))
 
+    def process_request(self, x):
+        base = 3*x**3 + 2*x**2 + x + 10**5
+        variation = random.uniform(0.8, 1.51)
+        final = int(base * variation)
+        dummy = 0
+        start_time = time.time()
+        for i in range(final):
+            dummy += 1
+        end_time = time.time()
+        # if self.debug:
+            # print ('current request with param', x, 'has been processed for', end_time - start_time,'seconds')
+        return end_time - start_time
+        
     def dummy_job(self, power):
         """
         length varies for different type
