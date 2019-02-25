@@ -19,6 +19,7 @@ class RequestHandler(BaseHTTPRequestHandler, ABC):
         addr = upstream_server[server_id]+self.path
         # post the request
         r = requests.get(addr, headers=self.headers)
+        upstream_server_status[server_id].workloads+=1
         self.send_response(r.status_code)
         self.end_headers()
         self.wfile.write(bytes(r.text, 'UTF-8'))
@@ -43,7 +44,6 @@ class RoundRobinHandler(RequestHandler):
     cnt = 0
 
     def redirect_server_id(self):
-        # [TODO] handle non 0/1 cases
         RoundRobinHandler.cnt += 1
         return RoundRobinHandler.cnt%self.num_server
 
@@ -54,9 +54,18 @@ class LeastConnectionHandler(RequestHandler):
      This is the default method, because, in most circumstances, it provides the best performance.
      [RESOURCE] https://docs.citrix.com/en-us/netscaler/12/load-balancing/load-balancing-customizing-algorithms/leastconnection-method.html
     """
+
+
     def redirect_server_id(self):
         # [TODO]
-        return 0
+        server = None 
+        minimum = None
+        for serverID in upstream_server_status.keys():
+            if upstream_server_status[serverID].workloads < minimum or minimum==None:
+                minimum = upstream_server_status[serverID].workloads
+                server = serverID
+
+        return server
 
 class ChainedConnectionHandler(RequestHandler):
     """
@@ -66,9 +75,13 @@ class ChainedConnectionHandler(RequestHandler):
      then the third server. And so on.
      [RESOURCE] https://kemptechnologies.com/glossary/load-balancing-methods/
     """
+    cnt = 0
+
     def redirect_server_id(self):
         # [TODO]
-        return 0
+        ChainedConnectionHandler.cnt +=1 
+        z = ChainedConnectionHandler.cnt/10
+        return z%self.num_server
 
 class LeastPacketsHandler(RequestHandler):
     """
