@@ -18,8 +18,9 @@ class RequestHandler(BaseHTTPRequestHandler, ABC):
 
         addr = upstream_server[server_id]+self.path
         # post the request
-        r = requests.get(addr, headers=self.headers)
         upstream_server_status[server_id].workloads+=1
+        r = requests.get(addr, headers=self.headers)
+        upstream_server_status[server_id].workloads-=1
         self.send_response(r.status_code)
         self.end_headers()
         self.wfile.write(bytes(r.text, 'UTF-8'))
@@ -44,8 +45,8 @@ class RoundRobinHandler(RequestHandler):
     cnt = 0
 
     def redirect_server_id(self):
-        RoundRobinHandler.cnt += 1
-        return RoundRobinHandler.cnt%self.num_server
+        self.cnt += 1
+        return self.cnt%self.num_server
 
 class LeastConnectionHandler(RequestHandler):
     """
@@ -58,10 +59,10 @@ class LeastConnectionHandler(RequestHandler):
 
     def redirect_server_id(self):
         # [TODO]
-        server = None 
+        server = None
         minimum = None
         for serverID in upstream_server_status.keys():
-            if upstream_server_status[serverID].workloads < minimum or minimum==None:
+            if minimum==None or upstream_server_status[serverID].workloads < minimum :
                 minimum = upstream_server_status[serverID].workloads
                 server = serverID
 
@@ -76,12 +77,13 @@ class ChainedConnectionHandler(RequestHandler):
      [RESOURCE] https://kemptechnologies.com/glossary/load-balancing-methods/
     """
     cnt = 0
+    weight =10
 
     def redirect_server_id(self):
         # [TODO]
-        ChainedConnectionHandler.cnt +=1 
-        z = ChainedConnectionHandler.cnt/10
-        return z%self.num_server
+        self.cnt +=1 
+        self.cnt/=self.weight
+        return self.cnt%self.num_server
 
 class LeastPacketsHandler(RequestHandler):
     """
