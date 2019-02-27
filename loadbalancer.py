@@ -27,7 +27,7 @@ class ThreadingSimpleServer(ThreadingMixIn, HTTPServer):
 class LoadBalancerServer():
     HOST_NAME = 'localhost'
     PORT_NUMBER = 8080
-    REQUESTHANDLER = RoundRobinHandler        # Change Load Balancing Algorithm
+    REQUESTHANDLER = LeastConnectionHandler  # Change Load Balancing Algorithm
 
     def start_server(self):
         HOST_NAME = self.HOST_NAME
