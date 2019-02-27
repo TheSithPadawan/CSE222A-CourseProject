@@ -18,8 +18,9 @@ class RequestHandler(BaseHTTPRequestHandler, ABC):
 
         addr = upstream_server[server_id]+self.path
         # post the request
-        r = requests.get(addr, headers=self.headers)
         upstream_server_status[server_id].workloads+=1
+        r = requests.get(addr, headers=self.headers)
+        upstream_server_status[server_id].workloads-=1
         self.send_response(r.status_code)
         self.end_headers()
         self.wfile.write(bytes(r.text, 'UTF-8'))
@@ -61,7 +62,7 @@ class LeastConnectionHandler(RequestHandler):
         server = None 
         minimum = None
         for serverID in upstream_server_status.keys():
-            if upstream_server_status[serverID].workloads < minimum or minimum==None:
+            if minimum==None or upstream_server_status[serverID].workloads < minimum:
                 minimum = upstream_server_status[serverID].workloads
                 server = serverID
 

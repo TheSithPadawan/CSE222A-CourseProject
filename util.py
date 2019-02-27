@@ -60,7 +60,7 @@ class PlotUtil():
     def get_cdf(self, arr):
         fig, ax = plt.subplots(1, 1)
         n_bins = 100
-        colors = ['r', 'g']
+        colors = ['r', 'g', 'b']
         for i in range(len(arr)):
             data=arr[i][0]
             n, bins, patches = ax.hist(data, n_bins, normed=1, histtype='step', cumulative=True, label=arr[i][1], color=colors[i])
@@ -70,6 +70,8 @@ class PlotUtil():
         ax.set_ylabel('probability')
         ax.legend()
         plt.savefig('cdf_output.png')
+
+
         
 if __name__ == "__main__":
 
@@ -79,7 +81,7 @@ if __name__ == "__main__":
     plot_obj = PlotUtil()
     arr1 = plot_obj.read_from_file('rr_latency.txt')
     arr2 = plot_obj.read_from_file('random_latency.txt')
-
-    data = [(arr1, 'round robin'), (arr2, 'random')]
+    arr3 = plot_obj.read_from_file('least_connection_latency.txt')
+    data = [(arr1, 'round robin'), (arr2, 'random'), (arr3, 'least connection')]
     plot_obj.get_cdf(data)
     
