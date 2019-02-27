@@ -101,7 +101,7 @@ class Client:
         print(threading.currentThread().getName(), "sends request at time", time_elapsed)
         try:
             r = requests.get(endpoint)
-            self.responsecodes.append(r.status_code)
+            self.responsecodes.append(str(r.status_code))
         except requests.exceptions.ConnectionError:
             self.requestfailed += 1
             return
@@ -110,7 +110,7 @@ class Client:
         return
 
     def send_requests(self):
-        t = 1
+        t = 0
         self.init_time =  time.time()
         duration = len(self.requests)
         while t < duration:
@@ -131,7 +131,7 @@ class Client:
     def save_extra(self):
         # save supplementary
         with open('extra.txt', 'w') as fp:
-            fp.write(self.requestsent, ',', self.requestfailed)
+            fp.write(str(self.requestsent)+','+str(self.requestfailed))
             fp.write('\n')
             fp.write(' '.join(self.responsecodes))
 
