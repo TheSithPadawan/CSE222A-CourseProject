@@ -1,12 +1,14 @@
 import random
 import requests
 import threading
+import time
 from abc import ABC, abstractmethod
 from http.server import BaseHTTPRequestHandler
 from util import upstream_server, upstream_server_status
 
 class RequestHandler(BaseHTTPRequestHandler, ABC):
     connection_count = 0
+    TIME_OUT = 5
     
     def do_GET(self):
         print(threading.currentThread().getName(), "get the request, ready to serve")
@@ -18,12 +20,29 @@ class RequestHandler(BaseHTTPRequestHandler, ABC):
 
         addr = upstream_server[server_id]+self.path
         # post the request
-        upstream_server_status[server_id].workloads+=1
-        r = requests.get(addr, headers=self.headers)
-        upstream_server_status[server_id].workloads-=1
-        self.send_response(r.status_code)
-        self.end_headers()
-        self.wfile.write(bytes(r.text, 'UTF-8'))
+        
+        upstream_server_status[server_id].workloads += 1
+        
+        while True:
+            try:
+                r = requests.get(addr, headers=self.headers, timeout=self.TIME_OUT)
+                self.send_response(r.status_code)
+                self.end_headers()
+                self.wfile.write(bytes(r.text, 'UTF-8'))
+                break
+
+            except requests.exceptions.ConnectionError:
+                # when there is an connection error resend request
+                time.sleep(1)
+                self.TIME_OUT -= 1
+
+            except requests.exceptions.ConnectTimeout:
+                # when there is an connection time out
+                # send back error code
+                self.send_response(504)
+                self.end_headers()
+
+        upstream_server_status[server_id].workloads -= 1
 
     @abstractmethod
     def redirect_server_id(self):

@@ -55,9 +55,11 @@ class LoadBalancerServer():
             ts = time.time()
             try:
                 requests.get(endpoint)
-            except:
+            except requests.exceptions.ConnectionError:
                 raise Exception("Endpoint not accessiable, start backend server first!")
                 break
+            # [TODO] Handle TIMEOUT AS SERVER FAILURE
+            
             latency = time.time() - ts
             upstream_server_status[serverID].delays.put(latency)
         

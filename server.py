@@ -8,6 +8,7 @@ import time
 import sys
 import random 
 import argparse
+import requests
 
 # from worker import DummyWorker
 from urllib.parse import urlparse
@@ -34,13 +35,13 @@ class MyHandler(BaseHTTPRequestHandler):
             '/qux': {'status': 500}
         }
 
-        delay_time = self.handle_one()
+        delay_time, data = self.handle_one()
 
         self.send_response(200)
         self.send_header("Set-Cookie", "foo=bar")
         self.end_headers()
 
-        self.respond({'delays': delay_time})
+        self.respond({'delays': delay_time, 'data': data})
         print (threading.currentThread().getName(), "finished :", round(time.time()-ts, 4))
         return 
 
@@ -48,11 +49,14 @@ class MyHandler(BaseHTTPRequestHandler):
         query = urlparse(self.path).query
         query_component = dict(qc.split('=') for qc in query.split('&'))
         type_args = query_component['type']
+        data = str()
         if type_args == 'hc':
             delay_time = 0
         else:
-            delay_time = self.process_request(int(type_args))
-        return delay_time
+            delay_time = self.process_request_sigmoid(int(type_args))
+            # delay_time_delta, data = self.dummy_io_job(3-max(int(type_args),3)//10)
+            # delay_time += delay_time_delta
+        return delay_time, data
 
     def respond(self, json_data):
         data = json.dumps(json_data)
@@ -70,8 +74,18 @@ class MyHandler(BaseHTTPRequestHandler):
         # if self.debug:
             # print ('current request with param', x, 'has been processed for', end_time - start_time,'seconds')
         return end_time - start_time
-        
-    def dummy_job(self, power):
+      
+    def process_request_sigmoid(self, x):
+        def customized_sigmoid(x, slope=4):
+            # returns a number between 0 - 2
+            return (x / (1+abs(x)/slope)) / slope + 1
+            
+        multiplier = customized_sigmoid(x) * 100
+        base = 10**3
+        # workload     0.001s - 0.2s
+        return self.dummy_job(base*multiplier)
+
+    def dummy_job(self, loop):
         """
         length varies for different type
         total latency = base latency * random in range [0.85 - 1.51)
@@ -80,12 +94,18 @@ class MyHandler(BaseHTTPRequestHandler):
         # power = 4   # 'LIGHT'     0.001s
         """
         ts = time.time()
-        # modify here to adjust run time
-        base = 10**power
-        actual = int(base * random.uniform(0.85, 1.51))
+        actual = int(loop * random.uniform(0.95, 1.11))
         for i in range(actual):
             a = 1
         return time.time()-ts
+
+    def dummy_io_job(self, x):
+        ts = time.time()
+        content = str()
+        for i in range(x):
+            content += requests.get("http://www.google.com").text
+        return time.time()-ts, content
+
 
 class MyServer():
 

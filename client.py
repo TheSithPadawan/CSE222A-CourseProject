@@ -29,6 +29,7 @@ class RequestUtil():
         pos = t % T
         num_request = A * np.abs(np.sin((t/T) * np.pi))
         return int(num_request)
+        # return 1
 
     """
     draw a sample request to send from log normal distribution 
@@ -36,10 +37,9 @@ class RequestUtil():
     output: label of the request to send 
     """
     def draw_sample(self, mu = 3.4, sigma = 1.):
-        s = 100
-        while s >= 100:
-            s = np.random.lognormal(mu, sigma)
 
+        s = np.random.lognormal(mu, sigma)
+        
         if self.debug:
             dist = np.random.lognormal(mu, sigma, 1000)
             count, bins, ignored = plt.hist(s, 100, align='mid')
@@ -85,21 +85,33 @@ class RequestUtil():
 
 
 class Client:
+    init_time = 0
+    requestsent = 0
+    requestfailed = 0
     latency = list()
-    init_time = time.time()
+    requests = list()
+    responsecodes = list()
     requestUtil = RequestUtil(False)
-    requests = []
     
     def asyn_request(self, endpoint, delay_send=0):
         time.sleep(delay_send)
         ts = time.time()
+        self.requestsent += 1
         time_elapsed = round(ts-self.init_time, 5)
         print(threading.currentThread().getName(), "sends request at time", time_elapsed)
-        r = requests.get(endpoint)
+        try:
+            r = requests.get(endpoint)
+            self.responsecodes.append(r.status_code)
+        except requests.exceptions.ConnectionError:
+            self.requestfailed += 1
+            return
+
         self.latency.append((time_elapsed, round(time.time()-ts, 5)))
+        return
 
     def send_requests(self):
         t = 1
+        self.init_time =  time.time()
         duration = len(self.requests)
         while t < duration:
             numOfRequest = self.requests[t]
@@ -107,7 +119,7 @@ class Client:
             for i in range(len(self.requests[t])):
                 requestType = self.requests[t][i]
                 endpoint = "http://"+HOST+":"+PORT+"/foo?type="+str(requestType)
-                thread = threading.Thread(target=self.asyn_request, args = (endpoint, interval*i))
+                thread = threading.Thread(target=self.asyn_request, args = (endpoint, interval*(i+1)))
                 thread.start()
             t += 1
             time.sleep(1)
@@ -115,6 +127,14 @@ class Client:
     def save_latency(self):
         with open('latency.txt', 'w') as fp:
             fp.write('\n'.join('%s %s' % x for x in self.latency))
+
+    def save_extra(self):
+        # save supplementary
+        with open('extra.txt', 'w') as fp:
+            fp.write(self.requestsent, ',', self.requestfailed)
+            fp.write('\n')
+            fp.write(' '.join(self.responsecodes))
+
 
     def get_request_file(self, fn, period=60):
         self.requestUtil.generate_request_file(fn, period)
@@ -131,4 +151,5 @@ if __name__ == "__main__":
     client.read_request_file('requests.txt')
     client.send_requests()
     client.save_latency()
+    client.save_extra()
     # client.get_request_file('requests.txt')
