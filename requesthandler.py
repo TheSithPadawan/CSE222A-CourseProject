@@ -15,26 +15,31 @@ class RequestHandler(BaseHTTPRequestHandler, ABC):
         RequestHandler.connection_count += 1
         self.num_server = len(upstream_server)
 
-        # select next server bsaed on different implementation
-        server_id = self.redirect_server_id()
-
-        addr = upstream_server[server_id]+self.path
-        # post the request
-        
-        upstream_server_status[server_id].workloads += 1
+       
         
         while True:
             try:
+                # select next server bsaed on different implementation
+                server_id = self.redirect_server_id()
+
+                addr = upstream_server[server_id]+self.path
+                # post the request
+                
+                upstream_server_status[server_id].workloads += 1
+                # unserved_request_set.add((addr,self.headers,self.TIME_OUT))
                 r = requests.get(addr, headers=self.headers, timeout=self.TIME_OUT)
+                #unserved_request_set.remove((addr,self.headers,self.TIME_OUT))
                 self.send_response(r.status_code)
                 self.end_headers()
                 self.wfile.write(bytes(r.text, 'UTF-8'))
                 break
 
             except requests.exceptions.ConnectionError:
+                upstream_server_status[server_id].workloads -= 1   # reducing connection of failed server
+                continue   # going to try again
                 # when there is an connection error resend request
-                time.sleep(1)
-                self.TIME_OUT -= 1
+                #time.sleep(1)    commenting these statements as cannot understand the purpose 
+                #self.TIME_OUT -= 1   commenting these statements as cannot understand the purpose 
 
             except requests.exceptions.ConnectTimeout:
                 # when there is an connection time out
@@ -50,7 +55,7 @@ class RequestHandler(BaseHTTPRequestHandler, ABC):
 
 class RandomHandler(RequestHandler):
     #handled the server failure     
-    def redirect_server_id(self):
+    def redirect_server_id(self): 
         serverID = random.randint(0, self.num_server-1)
         while (upstream_server_status[serverID].alive ==False):
             serverID = random.randint(0, self.num_server-1)
@@ -145,3 +150,9 @@ class LeastLatencyHandler(RequestHandler):
         upstream_server_status[min_latency_id].delays.put(min_latency+0.02) # hard code estimate per request
         # print('LeastLatencyHandler to \t\t\t\t', min_latency_id, '\t\t', round(min_latency,4))
         return min_latency_id
+
+
+
+
+
+      
