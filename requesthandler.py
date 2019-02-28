@@ -49,9 +49,12 @@ class RequestHandler(BaseHTTPRequestHandler, ABC):
         pass
 
 class RandomHandler(RequestHandler):
-    
+    #handled the server failure     
     def redirect_server_id(self):
-        return random.randint(0, self.num_server-1)
+        serverID = random.randint(0, self.num_server-1)
+        while (upstream_server_status[serverID].alive ==False):
+            serverID = random.randint(0, self.num_server-1)
+        return serverID    
 
 class RoundRobinHandler(RequestHandler):
     """
@@ -61,10 +64,13 @@ class RoundRobinHandler(RequestHandler):
      and then moves that service to the bottom of the list.
      [RESOURCE] https://docs.citrix.com/en-us/netscaler/12/load-balancing/load-balancing-customizing-algorithms/roundrobin-method.html
     """
+    #handled the server failure     
     cnt = 0
 
     def redirect_server_id(self):
         self.cnt += 1
+        while (upstream_server_status[self.cnt%self.num_server].alive ==False):
+            self.cnt+=1
         return self.cnt%self.num_server
 
 class LeastConnectionHandler(RequestHandler):
@@ -74,16 +80,17 @@ class LeastConnectionHandler(RequestHandler):
      This is the default method, because, in most circumstances, it provides the best performance.
      [RESOURCE] https://docs.citrix.com/en-us/netscaler/12/load-balancing/load-balancing-customizing-algorithms/leastconnection-method.html
     """
-
+    #handled the server failure   
 
     def redirect_server_id(self):
         # [TODO]
         server = None
         minimum = None
         for serverID in upstream_server_status.keys():
-            if minimum==None or upstream_server_status[serverID].workloads < minimum:
-                minimum = upstream_server_status[serverID].workloads
-                server = serverID
+            if upstream_server_status[serverID].alive ==True:
+                if minimum==None or upstream_server_status[serverID].workloads < minimum :
+                    minimum = upstream_server_status[serverID].workloads
+                    server = serverID
 
         return server
 
@@ -95,14 +102,18 @@ class ChainedConnectionHandler(RequestHandler):
      then the third server. And so on.
      [RESOURCE] https://kemptechnologies.com/glossary/load-balancing-methods/
     """
+    #handled the server failure
+
     cnt = 0
     weight =10
 
     def redirect_server_id(self):
         # [TODO]
-        self.cnt +=1 
-        self.cnt/=self.weight
-        return self.cnt%self.num_server
+        self.cnt +=1
+        while (upstream_server_status[int((self.cnt/self.weight))%self.num_server].alive ==False):
+            self.cnt+=self.weight
+
+        return int((self.cnt/self.weight))%self.num_server
 
 class LeastPacketsHandler(RequestHandler):
     """
@@ -116,15 +127,19 @@ class LeastPacketsHandler(RequestHandler):
         return 0
 
 class LeastLatencyHandler(RequestHandler):
+
+    #handled the server failure 
+
     def redirect_server_id(self):
         min_latency_id = 0
         min_latency = 999
         for serverID in upstream_server_status.keys():
-            latency = upstream_server_status[serverID].delays.get()
-            # print('print(serverID, latency)', serverID, latency)
-            if min_latency > latency:
-                min_latency = latency
-                min_latency_id = serverID
+            if upstream_server_status[serverID].alive ==True:
+                latency = upstream_server_status[serverID].delays.get()
+                # print('print(serverID, latency)', serverID, latency)
+                if min_latency > latency:
+                    min_latency = latency
+                    min_latency_id = serverID
         # print('min_latency_id', min_latency_id)
         # [TODO] estimate the latency of each type of request
         upstream_server_status[min_latency_id].delays.put(min_latency+0.02) # hard code estimate per request

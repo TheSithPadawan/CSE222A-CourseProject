@@ -27,7 +27,7 @@ class ThreadingSimpleServer(ThreadingMixIn, HTTPServer):
 class LoadBalancerServer():
     HOST_NAME = 'localhost'
     PORT_NUMBER = 8080
-    REQUESTHANDLER = LeastConnectionHandler  # Change Load Balancing Algorithm
+    REQUESTHANDLER = LeastLatencyHandler  # Change Load Balancing Algorithm
 
     def start_server(self):
         HOST_NAME = self.HOST_NAME
@@ -56,6 +56,7 @@ class LoadBalancerServer():
             try:
                 requests.get(endpoint)
             except requests.exceptions.ConnectionError:
+                upstream_server_status[serverID].alive = False 
                 raise Exception("Endpoint not accessiable, start backend server first!")
                 break
             # [TODO] Handle TIMEOUT AS SERVER FAILURE
