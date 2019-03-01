@@ -50,12 +50,17 @@ class LoadBalancerServer():
         
 
     def get_server_latency(self, endpoint, serverID, frequency=0.1):
+        z=0
         while True:
             time.sleep(frequency)
             ts = time.time()
             try:
                 requests.get(endpoint)
             except requests.exceptions.ConnectionError:
+                z+=1
+                if z<=60:
+                    continue
+                upstream_server_status[serverID].alive = False 
                 raise Exception("Endpoint not accessiable, start backend server first!")
                 break
             # [TODO] Handle TIMEOUT AS SERVER FAILURE
