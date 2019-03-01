@@ -29,7 +29,6 @@ class RequestUtil():
         pos = t % T
         num_request = A * np.abs(np.sin((t/T) * np.pi))
         return int(num_request)
-        # return 1
 
     """
     draw a sample request to send from log normal distribution 
@@ -48,22 +47,6 @@ class RequestUtil():
             plt.plot(x, pdf, linewidth=2, color='r')
             plt.show()
         return int(s)
-        
-    """
-    process each request given the parameter 
-    this grows in polynomial time
-    """
-    def process_request(self, x):
-        base = 3*x**3 + 2*x**2 + x + 10**5
-        variation = np.random.uniform(0.8, 1.51)
-        final = int(base * variation)
-        dummy = 0
-        start_time = time.time()
-        for i in range(final):
-            dummy += 1
-        end_time = time.time()
-        if self.debug:
-            print ('current request with param', x, 'has been processed for', end_time - start_time,'seconds')
 
     """
     input: generate a request file for sending requests for
