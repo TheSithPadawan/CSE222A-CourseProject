@@ -73,10 +73,10 @@ class RoundRobinHandler(RequestHandler):
     cnt = 0
 
     def redirect_server_id(self):
-        self.cnt += 1
-        while (upstream_server_status[self.cnt%self.num_server].alive ==False):
-            self.cnt+=1
-        return self.cnt%self.num_server
+        RoundRobinHandler.cnt += 1
+        while (upstream_server_status[RoundRobinHandler.cnt%self.num_server].alive ==False):
+            RoundRobinHandler.cnt+=1
+        return RoundRobinHandler.cnt%self.num_server
 
 class LeastConnectionHandler(RequestHandler):
     """
@@ -114,11 +114,11 @@ class ChainedConnectionHandler(RequestHandler):
 
     def redirect_server_id(self):
         # [TODO]
-        self.cnt +=1
-        while (upstream_server_status[int((self.cnt/self.weight))%self.num_server].alive ==False):
-            self.cnt+=self.weight
+        ChainedConnectionHandler.cnt +=1
+        while (upstream_server_status[int((ChainedConnectionHandler.cnt/self.weight))%self.num_server].alive ==False):
+            ChainedConnectionHandler.cnt+=self.weight
 
-        return int((self.cnt/self.weight))%self.num_server
+        return int((ChainedConnectionHandler.cnt/self.weight))%self.num_server
 
 class LeastPacketsHandler(RequestHandler):
     """
