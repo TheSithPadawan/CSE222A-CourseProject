@@ -16,17 +16,10 @@ from urllib.parse import urlparse
 class ThreadingSimpleServer(ThreadingMixIn, HTTPServer):
     pass
 
-
-"""
-Three types of requests:
-parameter a, b and c 
-request format: http://localhost:port/foo?type=(a, b, c)
-"""
 class MyHandler(BaseHTTPRequestHandler):
         
     def do_GET(self):
         ts = time.time()
-        print (threading.currentThread().getName(), "get the request, ready to compute")
         # self.path is the parameter
         paths = {
             '/foo': {'status': 200},
@@ -85,7 +78,7 @@ class MyHandler(BaseHTTPRequestHandler):
             return (x / (1+abs(x)/slope)) / slope + 1
             
         multiplier = customized_sigmoid(x) * 100
-        base = 10**3
+        base = 3.5*10**3
         # workload     0.001s - 0.2s
         return self.dummy_job(base*multiplier)
 

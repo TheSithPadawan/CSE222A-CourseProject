@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-class MaxQueue():
+class Queue():
     def __init__(self, size=5):
         self.size = size
         self.data = [0] * size
@@ -18,11 +18,22 @@ class MaxQueue():
     def __str__(self):
         return str(self.data)
 
+class AvgLatency():
+    def __init__(self, size=5):
+        self.latency = Queue(10)
+
+    def put(self, latency):
+        self.latency.put(latency)
+
+    def get(self):
+        return sum(self.latency.data)/self.latency.size
+
 class ServerStatus():
     def __init__(self):
         self.workloads = 0
-        self.delays = MaxQueue(5)
+        self.delays = Queue(5)
         self.alive = True
+        self.avglatency = AvgLatency()
 
 upstream_server = {
     0: "http://127.0.0.1:5050",
@@ -60,7 +71,7 @@ class PlotUtil():
     def get_cdf(self, arr):
         fig, ax = plt.subplots(1, 1)
         n_bins = 100
-        colors = ['r', 'g', 'b']
+        colors = ['r', 'g', 'b', 'y', 'c', 'm']
         for i in range(len(arr)):
             data=arr[i][0]
             n, bins, patches = ax.hist(data, n_bins, normed=1, histtype='step', cumulative=True, label=arr[i][1], color=colors[i])
@@ -86,16 +97,21 @@ if __name__ == "__main__":
 
     """
     change file name for the latency files
-    
+    """
     plot_obj = PlotUtil()
     arr1 = plot_obj.read_from_file('rr_latency.txt')
-    arr2 = plot_obj.read_from_file('random_latency.txt')
-    arr3 = plot_obj.read_from_file('least_connection_latency.txt')
-    data = [(arr1, 'round robin'), (arr2, 'random'), (arr3, 'least connection')]
+    arr2 = plot_obj.read_from_file('ra_latency.txt')
+    arr3 = plot_obj.read_from_file('lc_latency.txt')
+    arr4 = plot_obj.read_from_file('ll_latency.txt')
+    arr5 = plot_obj.read_from_file('ch_latency.txt')
+    data = [(arr1, 'round robin'),
+            (arr2, 'random'),
+            (arr3, 'least connection'),
+            (arr4, 'Least Latency'),
+            (arr5, 'Chained Round Robin')]
     plot_obj.get_cdf(data)
-    """
 
     # plotting server request processing time distribution
-    plot_obj = PlotUtil()
-    arr = plot_obj.read_from_file('latency.txt')
-    plot_obj.get_histogram(arr)
+    # plot_obj = PlotUtil()
+    # arr = plot_obj.read_from_file('latency.txt')
+    # plot_obj.get_histogram(arr)

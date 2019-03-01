@@ -96,6 +96,7 @@ class Client:
         t = 0
         self.init_time =  time.time()
         duration = len(self.requests)
+        threads = list()
         while t < duration:
             numOfRequest = self.requests[t]
             interval = 1/(len(numOfRequest)+1)
@@ -104,18 +105,25 @@ class Client:
                 endpoint = "http://"+HOST+":"+PORT+"/foo?type="+str(requestType)
                 thread = threading.Thread(target=self.asyn_request, args = (endpoint, interval*(i+1)))
                 thread.start()
+                threads.append(thread)
             t += 1
             time.sleep(1)
 
+        for thread in threads:
+            thread.join()
+
     def save_latency(self):
+        print('writing latency to file')
         with open('latency.txt', 'w') as fp:
             fp.write('\n'.join('%s %s' % x for x in self.latency))
 
     def save_extra(self):
         # save supplementary
+        print('writing extras to file')
         with open('extra.txt', 'w') as fp:
-            fp.write(str(self.requestsent)+','+str(self.requestfailed))
-            fp.write('\n')
+            fp.write('requests sent:     \t'+str(self.requestsent)+'\n')
+            fp.write('responses received:\t'+str(len(self.responsecodes))+'\n')
+            fp.write('requests failed:   \t'+str(self.requestfailed)+'\n')
             fp.write(' '.join(self.responsecodes))
 
 

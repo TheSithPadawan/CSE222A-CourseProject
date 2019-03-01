@@ -4,53 +4,55 @@ import threading
 import time
 from abc import ABC, abstractmethod
 from http.server import BaseHTTPRequestHandler
+from requests.exceptions import (
+    ConnectionError,
+    ConnectTimeout,
+    ReadTimeout
+    )
 from util import upstream_server, upstream_server_status
 
 class RequestHandler(BaseHTTPRequestHandler, ABC):
     connection_count = 0
-    TIME_OUT = 5
+    TIME_OUT = 3
     
     def do_GET(self):
-        print(threading.currentThread().getName(), "get the request, ready to serve")
         RequestHandler.connection_count += 1
         self.num_server = len(upstream_server)
 
-       
-        
-        while True:
+        while self.TIME_OUT > 0:
             try:
                 # select next server bsaed on different implementation
                 server_id = self.redirect_server_id()
+                endpoint = upstream_server[server_id]+self.path
 
-                addr = upstream_server[server_id]+self.path
-                # post the request
-                
-                upstream_server_status[server_id].workloads += 1
-                # unserved_request_set.add((addr,self.headers,self.TIME_OUT))
-                r = requests.get(addr, headers=self.headers, timeout=self.TIME_OUT)
-                #unserved_request_set.remove((addr,self.headers,self.TIME_OUT))
+                r = self.redirect_request(server_id, endpoint)
+
                 self.send_response(r.status_code)
                 self.end_headers()
                 self.wfile.write(bytes(r.text, 'UTF-8'))
                 break
 
-            except requests.exceptions.ConnectionError:
-                upstream_server_status[server_id].workloads -= 1   # reducing connection of failed server
-                continue   # going to try again
+            except ConnectionError:
                 # when there is an connection error resend request
-                #time.sleep(1)    commenting these statements as cannot understand the purpose 
-                #self.TIME_OUT -= 1   commenting these statements as cannot understand the purpose 
+                # going to try again after 0.5s 
+                # (ps, if try again immediately, will likely comes to connection error again)
+                print('ConnectionError, Retransmission required')
+                time.sleep(0.5)
+                self.TIME_OUT -= 0.5
+                continue   
 
-            except requests.exceptions.ConnectTimeout:
+            except (ConnectTimeout, ReadTimeout):
                 # when there is an connection time out
                 # send back error code
                 self.send_response(504)
                 self.end_headers()
 
-        upstream_server_status[server_id].workloads -= 1
-
     @abstractmethod
     def redirect_server_id(self):
+        pass
+
+    @abstractmethod
+    def redirect_request(self, server_id, endpoint):
         pass
 
 class RandomHandler(RequestHandler):
@@ -61,6 +63,9 @@ class RandomHandler(RequestHandler):
             serverID = random.randint(0, self.num_server-1)
         return serverID    
 
+    def redirect_request(self, server_id, endpoint):
+        return requests.get(endpoint, headers=self.headers, timeout=self.TIME_OUT)
+
 class RoundRobinHandler(RequestHandler):
     """
      A server has a list of all the unique IP addresses that are associated with the Internet domain name. 
@@ -69,14 +74,20 @@ class RoundRobinHandler(RequestHandler):
      and then moves that service to the bottom of the list.
      [RESOURCE] https://docs.citrix.com/en-us/netscaler/12/load-balancing/load-balancing-customizing-algorithms/roundrobin-method.html
     """
-    #handled the server failure     
     cnt = 0
 
     def redirect_server_id(self):
-        RoundRobinHandler.cnt += 1
-        while (upstream_server_status[RoundRobinHandler.cnt%self.num_server].alive ==False):
-            RoundRobinHandler.cnt+=1
-        return RoundRobinHandler.cnt%self.num_server
+        while True:
+            server_id = RoundRobinHandler.cnt % self.num_server
+            RoundRobinHandler.cnt += 1
+            if upstream_server_status[server_id].alive ==False:
+                continue
+            else:
+                break
+        return server_id
+
+    def redirect_request(self, server_id, endpoint):
+        return requests.get(endpoint, headers=self.headers, timeout=self.TIME_OUT)
 
 class LeastConnectionHandler(RequestHandler):
     """
@@ -85,10 +96,8 @@ class LeastConnectionHandler(RequestHandler):
      This is the default method, because, in most circumstances, it provides the best performance.
      [RESOURCE] https://docs.citrix.com/en-us/netscaler/12/load-balancing/load-balancing-customizing-algorithms/leastconnection-method.html
     """
-    #handled the server failure   
 
     def redirect_server_id(self):
-        # [TODO]
         server = None
         minimum = None
         for serverID in upstream_server_status.keys():
@@ -99,6 +108,16 @@ class LeastConnectionHandler(RequestHandler):
 
         return server
 
+    def redirect_request(self, server_id, endpoint):
+        try:
+            upstream_server_status[server_id].workloads += 1
+            r = requests.get(endpoint, headers=self.headers, timeout=self.TIME_OUT)
+            upstream_server_status[server_id].workloads -= 1
+        except (ConnectionError, ConnectTimeout, ReadTimeout) as error:
+            upstream_server_status[server_id].workloads -= 1
+            raise error
+        return r
+
 class ChainedConnectionHandler(RequestHandler):
     """
      In this method, a predetermined order of servers is configured in a chain. 
@@ -107,18 +126,21 @@ class ChainedConnectionHandler(RequestHandler):
      then the third server. And so on.
      [RESOURCE] https://kemptechnologies.com/glossary/load-balancing-methods/
     """
-    #handled the server failure
-
     cnt = 0
     weight =10
 
     def redirect_server_id(self):
-        # [TODO]
-        ChainedConnectionHandler.cnt +=1
-        while (upstream_server_status[int((ChainedConnectionHandler.cnt/self.weight))%self.num_server].alive ==False):
-            ChainedConnectionHandler.cnt+=self.weight
+        while True:
+            server_id = (ChainedConnectionHandler.cnt // self.weight)%self.num_server
+            ChainedConnectionHandler.cnt += 1
+            if upstream_server_status[server_id].alive ==False:
+                ChainedConnectionHandler.cnt += self.weight
+            else:
+                break
+        return server_id
 
-        return int((ChainedConnectionHandler.cnt/self.weight))%self.num_server
+    def redirect_request(self, server_id, endpoint):
+        return requests.get(endpoint, headers=self.headers, timeout=self.TIME_OUT)
 
 class LeastPacketsHandler(RequestHandler):
     """
@@ -132,27 +154,42 @@ class LeastPacketsHandler(RequestHandler):
         return 0
 
 class LeastLatencyHandler(RequestHandler):
-
-    #handled the server failure 
-
+    """
+     Least Latency chooses server which replies the server health check first
+     If servers reply with same timestamp, compare the health check latency
+     Add an additional avg letency to the selected server
+    """
     def redirect_server_id(self):
-        min_latency_id = 0
+        server_id = 0
         min_latency = 999
+        max_ts = 0
+
         for serverID in upstream_server_status.keys():
             if upstream_server_status[serverID].alive ==True:
-                latency = upstream_server_status[serverID].delays.get()
-                # print('print(serverID, latency)', serverID, latency)
-                if min_latency > latency:
+                ts, latency = upstream_server_status[serverID].delays.get()
+                if max_ts < ts:
+                    max_ts = ts
                     min_latency = latency
-                    min_latency_id = serverID
-        # print('min_latency_id', min_latency_id)
-        # [TODO] estimate the latency of each type of request
-        upstream_server_status[min_latency_id].delays.put(min_latency+0.02) # hard code estimate per request
-        # print('LeastLatencyHandler to \t\t\t\t', min_latency_id, '\t\t', round(min_latency,4))
-        return min_latency_id
+                    server_id = serverID
+                elif max_ts == ts and min_latency > latency:
+                    min_latency = latency
+                    server_id = serverID
+        # print('------------------------------------------------------')
+        # print('server 0 estimate', upstream_server_status[0].avglatency.get())
+        # print('server 0 ts', upstream_server_status[0].delays.get()[0])
+        # print('server 0 delay', upstream_server_status[0].delays.get()[1])
+        # print('server 1 estimate', upstream_server_status[1].avglatency.get())
+        # print('server 1 ts', upstream_server_status[1].delays.get()[0])
+        # print('server 1 delay', upstream_server_status[1].delays.get()[1])
+        # print('sent to server', server_id)
+        return server_id
 
-
-
-
-
+    def redirect_request(self, server_id, endpoint):
+        ts, latency = upstream_server_status[server_id].delays.get()
+        # add estimated avg latency to selected server
+        upstream_server_status[server_id].delays.put((ts, latency+upstream_server_status[server_id].avglatency.get()))
+        r = requests.get(endpoint, headers=self.headers, timeout=self.TIME_OUT)
+        # update estimated avg latency
+        upstream_server_status[server_id].avglatency.put(r.json()['delays'])
+        return r
       

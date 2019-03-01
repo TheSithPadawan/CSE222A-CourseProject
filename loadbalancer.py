@@ -27,7 +27,7 @@ class ThreadingSimpleServer(ThreadingMixIn, HTTPServer):
 class LoadBalancerServer():
     HOST_NAME = 'localhost'
     PORT_NUMBER = 8080
-    REQUESTHANDLER = LeastConnectionHandler  # Change Load Balancing Algorithm
+    REQUESTHANDLER = LeastLatencyHandler  # Change Load Balancing Algorithm
 
     def start_server(self):
         HOST_NAME = self.HOST_NAME
@@ -45,28 +45,29 @@ class LoadBalancerServer():
         endpoints = [(key, ip+'/foo?type=hc') for (key, ip) in upstream_server.items()]
         for serverID, endpoint in endpoints:
             print(endpoint)
-            thread = threading.Thread(target=self.get_server_latency, args = (endpoint, serverID))
+            thread = threading.Thread(target=self.get_server_status, args = (endpoint, serverID))
             thread.start()
         
 
-    def get_server_latency(self, endpoint, serverID, frequency=0.1):
+    def get_server_status(self, endpoint, serverID, frequency=0.1):
         z=0
-        while True:
+        cnt = 0
+        failure_threshold = 3
+        while upstream_server_status[serverID].alive:
             time.sleep(frequency)
             ts = time.time()
+            cnt += 1
             try:
                 requests.get(endpoint)
-            except requests.exceptions.ConnectionError:
+                z=0 # reset if there is a reponse
+            except:
                 z+=1
-                if z<=60:
+                if z<=failure_threshold*10:
                     continue
                 upstream_server_status[serverID].alive = False 
-                raise Exception("Endpoint not accessiable, start backend server first!")
-                break
-            # [TODO] Handle TIMEOUT AS SERVER FAILURE
             
             latency = time.time() - ts
-            upstream_server_status[serverID].delays.put(latency)
+            upstream_server_status[serverID].delays.put((round(frequency*cnt,1),latency))
         
 if __name__ == "__main__":
     lb = LoadBalancerServer()
