@@ -63,9 +63,13 @@ class MyHandler(BaseHTTPRequestHandler):
         self.wfile.write(bytes(data, 'UTF-8'))
 
     def process_request(self, x):
+        # impose a maximum time limit for the request 
+        MAX_TIMELIMIT = (3*100**3 + 2*100**2 + 100 * 10**5) * 1.5
         base = 3*x**3 + 2*x**2 + x + 10**5
-        variation = random.uniform(0.8, 1.51)
+        variation = random.uniform(0.9, 1.1)
         final = int(base * variation)
+        if x >= 150:
+            final = MAX_TIMELIMIT
         dummy = 0
         start_time = time.time()
         for i in range(final):

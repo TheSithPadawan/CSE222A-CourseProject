@@ -71,17 +71,31 @@ class PlotUtil():
         ax.legend()
         plt.savefig('cdf_output.png')
 
+    def get_histogram(self, arr, mu=3.4, sigma=1.):
+        num_bins = 100
+        fig, ax = plt.subplots(1, 1)
+        n, bins, patches = ax.hist(arr, num_bins, facecolor='blue', normed=1, alpha=0.5)
+        ax.grid(True)
+        ax.set_title('PDF for Processing Time')
+        ax.set_xlabel('Server Processing Time')
+        ax.set_ylabel('Probability')
+        plt.savefig('time_distribution.png')
 
         
 if __name__ == "__main__":
 
     """
     change file name for the latency files
-    """
+    
     plot_obj = PlotUtil()
     arr1 = plot_obj.read_from_file('rr_latency.txt')
     arr2 = plot_obj.read_from_file('random_latency.txt')
     arr3 = plot_obj.read_from_file('least_connection_latency.txt')
     data = [(arr1, 'round robin'), (arr2, 'random'), (arr3, 'least connection')]
     plot_obj.get_cdf(data)
-    
+    """
+
+    # plotting server request processing time distribution
+    plot_obj = PlotUtil()
+    arr = plot_obj.read_from_file('latency.txt')
+    plot_obj.get_histogram(arr)
