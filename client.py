@@ -3,9 +3,11 @@ import threading
 import time
 import numpy as np
 import matplotlib.pyplot as plt 
+from util import get_timestamp
 
-PORT = '8080'
-HOST = '127.0.0.1'
+PORT = '50505'
+# HOST = '127.0.0.1'
+HOST = '155.98.36.127'
 
 class RequestUtil():
     """
@@ -25,10 +27,10 @@ class RequestUtil():
     A = 50 RPS (amplitude)
     t: current time, measured by second 
     """
-    def get_traffic_pattern(self, t, A = 30, T = 60):
+    def get_traffic_pattern(self, t, A = 60, T = 30):
         pos = t % T
         num_request = A * np.abs(np.sin((t/T) * np.pi))
-        return int(num_request)
+        return int(num_request) + 30
 
     """
     draw a sample request to send from log normal distribution 
@@ -81,13 +83,13 @@ class Client:
         ts = time.time()
         self.requestsent += 1
         time_elapsed = round(ts-self.init_time, 5)
-        print(threading.currentThread().getName(), "sends request at time", time_elapsed)
+        print(get_timestamp('Client'), "sends request at time", time_elapsed)
         try:
             r = requests.get(endpoint)
             self.responsecodes.append(str(r.status_code))
-        except requests.exceptions.ConnectionError:
+        except:
+            print(get_timestamp('Client'), "requests error")
             self.requestfailed += 1
-            return
 
         self.latency.append((time_elapsed, round(time.time()-ts, 5)))
         return
@@ -123,6 +125,7 @@ class Client:
         with open('extra.txt', 'w') as fp:
             fp.write('requests sent:     \t'+str(self.requestsent)+'\n')
             fp.write('responses received:\t'+str(len(self.responsecodes))+'\n')
+            fp.write('responses timeouts:\t'+str(sum(code == '504' for code in self.responsecodes))+'\n')
             fp.write('requests failed:   \t'+str(self.requestfailed)+'\n')
             fp.write(' '.join(self.responsecodes))
 

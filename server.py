@@ -29,13 +29,15 @@ class MyHandler(BaseHTTPRequestHandler):
         }
 
         delay_time, data = self.handle_one()
+        try:
+            self.send_response(200)
+            self.send_header("Set-Cookie", "foo=bar")
+            self.end_headers()
 
-        self.send_response(200)
-        self.send_header("Set-Cookie", "foo=bar")
-        self.end_headers()
-
-        self.respond({'delays': delay_time, 'data': data})
-        print (threading.currentThread().getName(), "finished :", round(time.time()-ts, 4))
+            self.respond({'delays': delay_time, 'data': data})
+            print (threading.currentThread().getName(), "finished :", round(time.time()-ts, 4))
+        except:
+            print (threading.currentThread().getName(), "broken :", round(time.time()-ts, 4))
         return 
 
     def handle_one(self):
@@ -106,7 +108,7 @@ class MyHandler(BaseHTTPRequestHandler):
 
 class MyServer():
 
-    HOST_NAME = 'localhost'
+    HOST_NAME = '0.0.0.0'
     PORT_NUMBER = 5050
 
     # def start_worker(self, num_of_worker=7, delays=5, work_duration=5, sleep_duration=5):
@@ -114,8 +116,9 @@ class MyServer():
     #         dworker = DummyWorker(delays, work_duration, sleep_duration, TTL=1000)
     #         dworker.start()
 
-    def start_server(self, port):
+    def start_server(self, port, hostname):
         self.PORT_NUMBER = port
+        self.HOST_NAME = hostname
         HOST_NAME = self.HOST_NAME
         PORT_NUMBER = self.PORT_NUMBER
         
@@ -130,6 +133,7 @@ class MyServer():
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Start Backend Server listening to HTTP requests')
     parser.add_argument('-p', '--port', action='store', required=True, dest='port', help='the port that server listens to', type=int)
+    parser.add_argument('-hs', '--hostname', action='store', dest='hostname', required=True, help='the host that server binds to', type=str)
     # parser.add_argument('-d', '--delay', action='store', dest='worker_delay', help='seconds that worker delays start', default=5, type=int)
     # parser.add_argument('-l', '--duration', action='store', dest='worker_duration', help='seconds that worker continuesly works', default=5, type=int)
     # parser.add_argument('-s', '--sleep', action='store', dest='worker_sleep', help='seconds that worker breaks between work time', default=5, type=int)
@@ -138,4 +142,4 @@ if __name__ == "__main__":
 
     server = MyServer()
     # server.start_worker(args['num_worker'], args['worker_delay'], args['worker_duration'], args['worker_sleep'])
-    server.start_server(args['port'])
+    server.start_server(args['port'], args['hostname'])

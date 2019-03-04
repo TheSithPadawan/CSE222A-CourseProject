@@ -4,18 +4,25 @@ import threading
 import time
 from abc import ABC, abstractmethod
 from http.server import BaseHTTPRequestHandler
+from util import (
+    upstream_server, 
+    upstream_server_status,
+    get_timestamp
+    )
 from requests.exceptions import (
     ConnectionError,
     ConnectTimeout,
-    ReadTimeout
+    ReadTimeout,
+    Timeout
     )
-from util import upstream_server, upstream_server_status
 
 class RequestHandler(BaseHTTPRequestHandler, ABC):
     connection_count = 0
     TIME_OUT = 3
     
     def do_GET(self):
+        ts = time.time()
+
         RequestHandler.connection_count += 1
         self.num_server = len(upstream_server)
 
@@ -30,22 +37,29 @@ class RequestHandler(BaseHTTPRequestHandler, ABC):
                 self.send_response(r.status_code)
                 self.end_headers()
                 self.wfile.write(bytes(r.text, 'UTF-8'))
+                return
+
+            except Timeout:
+                print(get_timestamp('RequestHandler'), 'TIME_OUT')
+                # when there is an connection time out
+                # send back error code
                 break
 
-            except ConnectionError:
+            except Exception as e:
+                print(get_timestamp('RequestHandler'))
+                print(e, end='\n\n')
                 # when there is an connection error resend request
                 # going to try again after 0.5s 
                 # (ps, if try again immediately, will likely comes to connection error again)
-                print('ConnectionError, Retransmission required')
-                time.sleep(0.5)
-                self.TIME_OUT -= 0.5
-                continue   
+                print('Exception, Retransmission required')
+                # time.sleep(0.5)
+                # self.TIME_OUT -= 0.5              
 
-            except (ConnectTimeout, ReadTimeout):
-                # when there is an connection time out
-                # send back error code
-                self.send_response(504)
-                self.end_headers()
+            self.TIME_OUT -= time.time()-ts
+        
+        print(get_timestamp('RequestHandler'), 'Sends back 504')
+        self.send_response(504)
+        self.end_headers()
 
     @abstractmethod
     def redirect_server_id(self):
@@ -187,7 +201,7 @@ class LeastLatencyHandler(RequestHandler):
     def redirect_request(self, server_id, endpoint):
         ts, latency = upstream_server_status[server_id].delays.get()
         # add estimated avg latency to selected server
-        upstream_server_status[server_id].delays.put((ts, latency+upstream_server_status[server_id].avglatency.get()))
+        upstream_server_status[server_id].delays.put((ts, upstream_server_status[server_id].avglatency.get()))
         r = requests.get(endpoint, headers=self.headers, timeout=self.TIME_OUT)
         # update estimated avg latency
         upstream_server_status[server_id].avglatency.put(r.json()['delays'])

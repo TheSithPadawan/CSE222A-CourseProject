@@ -1,5 +1,10 @@
+import time
 import numpy as np
 import matplotlib.pyplot as plt
+
+def get_timestamp(entity):
+    timestamp =  str(time.strftime("[%D %H:%M:%S]", time.localtime(time.time())))
+    return '%s - - %-15s' % (timestamp, entity+':')
 
 class Queue():
     def __init__(self, size=5):
@@ -36,13 +41,15 @@ class ServerStatus():
         self.avglatency = AvgLatency()
 
 upstream_server = {
-    0: "http://127.0.0.1:5050",
-    1: "http://127.0.0.1:6000"
+    0: "http://155.98.36.130:50505",
+    1: "http://155.98.36.129:50505",
+    2: "http://155.98.36.131:50505"
     }
 
 upstream_server_status = {
     0: ServerStatus(),
-    1: ServerStatus()
+    1: ServerStatus(),
+    2: ServerStatus()
 }
 
 class PlotUtil():
