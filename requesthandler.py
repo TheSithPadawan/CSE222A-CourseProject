@@ -7,7 +7,7 @@ from http.server import BaseHTTPRequestHandler
 from util import (
     upstream_server, 
     upstream_server_status,
-    get_timestamp,
+    get_timestamp
     )
 from requests.exceptions import (
     ConnectionError,
@@ -15,35 +15,39 @@ from requests.exceptions import (
     ReadTimeout,
     Timeout
     )
-from urllib.parse import urlparse
+
+init_time = time.time()
 
 class RequestHandler(BaseHTTPRequestHandler, ABC):
     connection_count = 0
-    TIME_OUT = 3
-    latency = []
+    TIME_OUT = 3    
     
     def do_GET(self):
+        ts = time.time()
+        time_elapsed = round(ts-init_time, 5)
+        
+        # redirect requests
+        self.handle_one()
 
+        delay = round(time.time()-ts, 5)
+        # [TODO] starts a new thread write to file?  ~0.0003s
+        with open('latency.txt', 'a') as fp:
+            fp.write('%s %s' % (time_elapsed, delay))
+            fp.write('\n')
+            fp.flush()
+        return
+        
+    def handle_one(self):
         RequestHandler.connection_count += 1
         self.num_server = len(upstream_server)
 
         while self.TIME_OUT > 0:
             try:
-                query = urlparse(self.path).query
-                query_component = dict(qc.split('=') for qc in query.split('&'))
-                type_args = query_component['type']
-                if type_args == 'EOF':
-                    print ('end of requests')
-                    self.save_latency()
-                    self.send_response(204)
-                    self.end_headers()
-                    return 
                 # select next server based on different implementation
                 server_id = self.redirect_server_id()
                 endpoint = upstream_server[server_id]+self.path
-                ts = time.time()
+                
                 r = self.redirect_request(server_id, endpoint)
-                self.latency.append((1, round(time.time()-ts, 5)))
                 self.send_response(r.status_code)
                 self.end_headers()
                 self.wfile.write(bytes(r.text, 'UTF-8'))
@@ -56,25 +60,17 @@ class RequestHandler(BaseHTTPRequestHandler, ABC):
                 break
 
             except Exception as e:
+                # when there is an connection error resend request
                 print(get_timestamp('RequestHandler'))
                 print(e, end='\n\n')
-                # when there is an connection error resend request
-                # going to try again after 0.5s 
-                # (ps, if try again immediately, will likely comes to connection error again)
                 print('Exception, Retransmission required')
-                # time.sleep(0.5)
-                # self.TIME_OUT -= 0.5              
 
             self.TIME_OUT -= time.time()-ts
         
         print(get_timestamp('RequestHandler'), 'Sends back 504')
         self.send_response(504)
         self.end_headers()
-
-    def save_latency(self):
-        print('writing latency to file')
-        with open('latency.txt', 'w') as fp:
-            fp.write('\n'.join('%s %s' % x for x in self.latency))
+        return
 
     @abstractmethod
     def redirect_server_id(self):
@@ -205,14 +201,6 @@ class LeastLatencyHandler(RequestHandler):
                 elif max_ts == ts and min_latency > latency:
                     min_latency = latency
                     server_id = serverID
-        # print('------------------------------------------------------')
-        # print('server 0 estimate', upstream_server_status[0].avglatency.get())
-        # print('server 0 ts', upstream_server_status[0].delays.get()[0])
-        # print('server 0 delay', upstream_server_status[0].delays.get()[1])
-        # print('server 1 estimate', upstream_server_status[1].avglatency.get())
-        # print('server 1 ts', upstream_server_status[1].delays.get()[0])
-        # print('server 1 delay', upstream_server_status[1].delays.get()[1])
-        # print('sent to server', server_id)
         return server_id
 
     def redirect_request(self, server_id, endpoint):

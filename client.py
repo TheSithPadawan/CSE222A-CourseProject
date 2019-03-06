@@ -4,8 +4,13 @@ import time
 import numpy as np
 from util import get_timestamp
 
-PORT = '50505'
-HOST = '155.98.36.127'
+LOCAL = False
+if LOCAL:
+    PORT = '8080'
+    HOST = '0.0.0.0'
+else:
+    PORT = '50505'
+    HOST = '155.98.36.127'
 
 class RequestUtil():
     """
@@ -64,7 +69,7 @@ class RequestUtil():
                 cnt += 1
                 fp.write(line)
                 fp.write('\n')
-            fp.write('EOF\n')
+            # fp.write('EOF\n')
             
 
 
@@ -126,7 +131,7 @@ class Client:
             fp.write(' '.join(self.responsecodes))
 
 
-    def get_request_file(self, fn, period=10):
+    def get_request_file(self, fn, period=120):
         self.requestUtil.generate_request_file(fn, period)
 
     def read_request_file(self, fn):
@@ -141,7 +146,6 @@ if __name__ == "__main__":
 
     client.read_request_file('requests.txt')
     client.send_requests()
-    # client.save_latency()
     client.save_extra()
    
     # client.get_request_file('requests.txt')

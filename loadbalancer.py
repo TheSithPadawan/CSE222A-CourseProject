@@ -48,9 +48,9 @@ class LoadBalancerServer():
         httpd = ThreadingSimpleServer((HOST_NAME, PORT_NUMBER), self.REQUESTHANDLER)
         try:
             httpd.serve_forever()
-        finally:
-            REQUESTHANDLER.save_latency()
-        httpd.server_close()
+        except:
+            print('Server Closed')
+            httpd.server_close()
 
     def start_healthcheck(self):
         endpoints = [(key, ip+'/foo?type=hc') for (key, ip) in upstream_server.items()]
@@ -68,7 +68,6 @@ class LoadBalancerServer():
                 if upstream_server_status[serverID].alive ==True:
                     alives += 1
             print(get_timestamp('LoadBalancerServer'), alives, 'servers alive')
-
 
     def get_server_status(self, endpoint, serverID, frequency=0.1):
         z=0
@@ -92,9 +91,8 @@ class LoadBalancerServer():
                     continue
                 upstream_server_status[serverID].alive = False 
             
-            latency = time.time() - ts
-            upstream_server_status[serverID].delays.put((round(frequency*cnt,1),latency))
-
+            delay = time.time() - ts
+            upstream_server_status[serverID].delays.put((round(frequency*cnt,1),delay))
         
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Start LoadBalancerServer listening to HTTP requests')

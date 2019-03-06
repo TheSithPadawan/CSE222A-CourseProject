@@ -2,6 +2,8 @@ import time
 import numpy as np
 import matplotlib.pyplot as plt
 
+LOCAL = False
+
 def get_timestamp(entity):
     timestamp =  str(time.strftime("[%D %H:%M:%S]", time.localtime(time.time())))
     return '%s - - %-15s' % (timestamp, entity+':')
@@ -32,7 +34,13 @@ class AvgLatency():
 
     def get(self):
         # return sum(self.latency.data)/self.latency.size
-        return Exp_Avg(np.array(self.latency.data), self.latency.size)
+        return self.exp_Avg(np.array(self.latency.data), self.latency.size)
+
+    def exp_Avg(self, data, window):
+        weights = np.exp(np.linspace(-1., 0., window))
+        weights /= weights.sum()
+        arr = np.convolve(data, weights)[:len(data)]
+        return arr[-1]
 
 class ServerStatus():
     def __init__(self):
@@ -41,24 +49,28 @@ class ServerStatus():
         self.alive = True
         self.avglatency = AvgLatency()
 
-upstream_server = {
-    0: "http://155.98.36.130:50505",
-    1: "http://155.98.36.129:50505",
-    2: "http://155.98.36.131:50505"
+if LOCAL:
+    upstream_server = {
+        0: "http://0.0.0.0:5050",
+        1: "http://0.0.0.0:6000"
+        }
+
+    upstream_server_status = {
+        0: ServerStatus(),
+        1: ServerStatus()
     }
+else:
+    upstream_server = {
+        0: "http://155.98.36.130:50505",
+        1: "http://155.98.36.129:50505",
+        2: "http://155.98.36.131:50505"
+        }
 
-upstream_server_status = {
-    0: ServerStatus(),
-    1: ServerStatus(),
-    2: ServerStatus()
-}
-
-def Exp_Avg(data, window):
-    weights = np.exp(np.linspace(-1., 0., window))
-    weights /= weights.sum()
-    arr = np.convolve(data, weights)[:len(data)]
-    return arr[-1]
-
+    upstream_server_status = {
+        0: ServerStatus(),
+        1: ServerStatus(),
+        2: ServerStatus()
+    }
 
 class PlotUtil():
     """
@@ -121,8 +133,8 @@ if __name__ == "__main__":
     arr4 = plot_obj.read_from_file('ll_latency.txt')
     arr5 = plot_obj.read_from_file('ch_latency.txt')
     data = [(arr1, 'round robin'),
-             (arr2, 'random'),
-             (arr3, 'least connection'),
+            (arr2, 'random'),
+            (arr3, 'least connection'),
             (arr4, 'Least Latency'),
             (arr5, 'Chained Round Robin')]
     # data = [(arr1, 'round robin'), (arr2, 'random'), (arr3, 'least connection')]

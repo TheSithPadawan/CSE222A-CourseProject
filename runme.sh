@@ -22,36 +22,42 @@ if [ -z "$1" ] ; then
   echo "\t[-live]\t: run vegeta requests flooding live plotting"
 fi
 
-if [ "$1" == "-ss" ] ; then
+if [ "$1" == "-setup" ] ; then
+  python3 -m pip install -r requirements.txt --user
+elif [ "$1" == "-update" ] ; then
+  scp *.py cloudlab0:repo
+  scp *.py cloudlab1:repo
+  scp *.py cloudlab2:repo
+  scp *.py cloudlab3:repo
+elif [ "$1" == "-all" ] ; then
+  rm *extra.txt
+  rm *latency.txt
+  ./cloudlab.sh
+  python util.py
+elif [ "$1" == "-ss" ] ; then
   echo "[-ss]\t: start servers on default settings"
   echo "start server 1 on port 5050"
-  python server.py -p 5050 &
+  python server.py -p 5050 -hs 0.0.0.0 &
   echo "start server 1 on port 6000"
-  python server.py -p 6000 &
-fi
-
-if [ "$1" == "-lb" ] ; then
-  echo "[-lb] \t: start loadbalancer on default settings"
-  echo "start loadbalancer on port 8080"
-  python loadbalancer.py &
-fi
-
-if [ "$1" == "-cl" ] ; then
+  python server.py -p 6000 -hs 0.0.0.0 &
+elif [ "$1" == "-lb" ] ; then
+  if [ -z "$2" ] ; then
+    echo "No algorithm input from argument"
+  else
+    echo "[-lb] \t: start loadbalancer on default settings"
+    echo "start loadbalancer on port 8080"
+    python loadbalancer.py -hs 0.0.0.0 -hd $2 &
+  fi
+elif [ "$1" == "-cl" ] ; then
   echo "[-cl]\t: start client on default settings"
   python client.py &
-fi
-
-if [ "$1" == "-show" ] ; then
+elif [ "$1" == "-show" ] ; then
   echo "[-show] \t: show onrunning python processes"
   ps -ef | grep python
-fi
-
-if [ "$1" == "-kill" ] ; then
+elif [ "$1" == "-kill" ] ; then
   echo "[-kill] \t: kill all python onrunning processes"
   pkill -f python
-fi
-
-if [ "$1" == "-vegeta" ] ; then
+elif [ "$1" == "-vegeta" ] ; then
   if [ -z "$2" ] ; then
     echo "=== SENDING REQUESTS TO SERVER http://${HOST}:${PORT} FOR ${DURATION}"
     echo "GET http://${HOST}:${PORT}/foo?type=b" | vegeta attack -name=50qps -rate=$RATE -duration=$DURATION > results.bin
@@ -73,7 +79,6 @@ if [ "$1" == "-vegeta" ] ; then
           latency.p95+latency.p50+latency.p25 \
           bytes_in.sum+bytes_out.sum
   fi
-fi
-if [ "$1" ] ; then
-  echo "done"
+else
+  echo "command not recongized"
 fi
