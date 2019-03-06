@@ -7,7 +7,7 @@ from http.server import BaseHTTPRequestHandler
 from util import (
     upstream_server, 
     upstream_server_status,
-    get_timestamp
+    get_timestamp,
     )
 from requests.exceptions import (
     ConnectionError,
@@ -15,25 +15,35 @@ from requests.exceptions import (
     ReadTimeout,
     Timeout
     )
+from urllib.parse import urlparse
 
 class RequestHandler(BaseHTTPRequestHandler, ABC):
     connection_count = 0
     TIME_OUT = 3
+    latency = []
     
     def do_GET(self):
-        ts = time.time()
 
         RequestHandler.connection_count += 1
         self.num_server = len(upstream_server)
 
         while self.TIME_OUT > 0:
             try:
-                # select next server bsaed on different implementation
+                query = urlparse(self.path).query
+                query_component = dict(qc.split('=') for qc in query.split('&'))
+                type_args = query_component['type']
+                if type_args == 'EOF':
+                    print ('end of requests')
+                    self.save_latency()
+                    self.send_response(204)
+                    self.end_headers()
+                    return 
+                # select next server based on different implementation
                 server_id = self.redirect_server_id()
                 endpoint = upstream_server[server_id]+self.path
-
+                ts = time.time()
                 r = self.redirect_request(server_id, endpoint)
-
+                self.latency.append((1, round(time.time()-ts, 5)))
                 self.send_response(r.status_code)
                 self.end_headers()
                 self.wfile.write(bytes(r.text, 'UTF-8'))
@@ -60,6 +70,11 @@ class RequestHandler(BaseHTTPRequestHandler, ABC):
         print(get_timestamp('RequestHandler'), 'Sends back 504')
         self.send_response(504)
         self.end_headers()
+
+    def save_latency(self):
+        print('writing latency to file')
+        with open('latency.txt', 'w') as fp:
+            fp.write('\n'.join('%s %s' % x for x in self.latency))
 
     @abstractmethod
     def redirect_server_id(self):
@@ -119,7 +134,7 @@ class LeastConnectionHandler(RequestHandler):
                 if minimum==None or upstream_server_status[serverID].workloads < minimum :
                     minimum = upstream_server_status[serverID].workloads
                     server = serverID
-
+                    
         return server
 
     def redirect_request(self, server_id, endpoint):
@@ -171,8 +186,10 @@ class LeastLatencyHandler(RequestHandler):
     """
      Least Latency chooses server which replies the server health check first
      If servers reply with same timestamp, compare the health check latency
-     Add an additional avg letency to the selected server
+     Add an additional avg latency to the selected server
     """
+    actual_latency = []
+    est_latency = []
     def redirect_server_id(self):
         server_id = 0
         min_latency = 999
@@ -205,5 +222,6 @@ class LeastLatencyHandler(RequestHandler):
         r = requests.get(endpoint, headers=self.headers, timeout=self.TIME_OUT)
         # update estimated avg latency
         upstream_server_status[server_id].avglatency.put(r.json()['delays'])
+        print ('actual delay', r.json()['delays'])
         return r
       

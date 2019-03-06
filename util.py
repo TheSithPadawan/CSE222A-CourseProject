@@ -31,7 +31,8 @@ class AvgLatency():
         self.latency.put(latency)
 
     def get(self):
-        return sum(self.latency.data)/self.latency.size
+        # return sum(self.latency.data)/self.latency.size
+        return Exp_Avg(np.array(self.latency.data), self.latency.size)
 
 class ServerStatus():
     def __init__(self):
@@ -52,6 +53,13 @@ upstream_server_status = {
     2: ServerStatus()
 }
 
+def Exp_Avg(data, window):
+    weights = np.exp(np.linspace(-1., 0., window))
+    weights /= weights.sum()
+    arr = np.convolve(data, weights)[:len(data)]
+    return arr[-1]
+
+
 class PlotUtil():
     """
     This class helps 
@@ -68,7 +76,8 @@ class PlotUtil():
         with open(fn,'r') as f:
             for line in f:
                 data = line.strip().split()
-                latency.append(float(data[1]))        
+                latency.append(float(data[1]))
+        # convert seconds to ms 
         return np.array(latency) * 1000
 
     """
@@ -89,7 +98,7 @@ class PlotUtil():
         ax.legend()
         plt.savefig('cdf_output.png')
 
-    def get_histogram(self, arr, mu=3.4, sigma=1.):
+    def get_histogram(self, arr):
         num_bins = 100
         fig, ax = plt.subplots(1, 1)
         n, bins, patches = ax.hist(arr, num_bins, facecolor='blue', normed=1, alpha=0.5)
@@ -112,13 +121,19 @@ if __name__ == "__main__":
     arr4 = plot_obj.read_from_file('ll_latency.txt')
     arr5 = plot_obj.read_from_file('ch_latency.txt')
     data = [(arr1, 'round robin'),
-            (arr2, 'random'),
-            (arr3, 'least connection'),
+             (arr2, 'random'),
+             (arr3, 'least connection'),
             (arr4, 'Least Latency'),
             (arr5, 'Chained Round Robin')]
+    # data = [(arr1, 'round robin'), (arr2, 'random'), (arr3, 'least connection')]
     plot_obj.get_cdf(data)
+    
 
     # plotting server request processing time distribution
-    # plot_obj = PlotUtil()
-    # arr = plot_obj.read_from_file('latency.txt')
-    # plot_obj.get_histogram(arr)
+    """
+    plot_obj = PlotUtil()
+    arr = plot_obj.read_from_file('latency.txt')
+    plot_obj.get_histogram(arr)
+    """
+
+    

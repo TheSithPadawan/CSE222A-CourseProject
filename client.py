@@ -2,11 +2,9 @@ import requests
 import threading
 import time
 import numpy as np
-import matplotlib.pyplot as plt 
 from util import get_timestamp
 
 PORT = '50505'
-# HOST = '127.0.0.1'
 HOST = '155.98.36.127'
 
 class RequestUtil():
@@ -66,6 +64,7 @@ class RequestUtil():
                 cnt += 1
                 fp.write(line)
                 fp.write('\n')
+            fp.write('EOF\n')
             
 
 
@@ -104,6 +103,8 @@ class Client:
             interval = 1/(len(numOfRequest)+1)
             for i in range(len(self.requests[t])):
                 requestType = self.requests[t][i]
+                if requestType == 'EOF':
+                    print ("sending EOF")
                 endpoint = "http://"+HOST+":"+PORT+"/foo?type="+str(requestType)
                 thread = threading.Thread(target=self.asyn_request, args = (endpoint, interval*(i+1)))
                 thread.start()
@@ -113,11 +114,6 @@ class Client:
 
         for thread in threads:
             thread.join()
-
-    def save_latency(self):
-        print('writing latency to file')
-        with open('latency.txt', 'w') as fp:
-            fp.write('\n'.join('%s %s' % x for x in self.latency))
 
     def save_extra(self):
         # save supplementary
@@ -130,7 +126,7 @@ class Client:
             fp.write(' '.join(self.responsecodes))
 
 
-    def get_request_file(self, fn, period=60):
+    def get_request_file(self, fn, period=10):
         self.requestUtil.generate_request_file(fn, period)
 
     def read_request_file(self, fn):
@@ -142,8 +138,10 @@ class Client:
             
 if __name__ == "__main__":
     client = Client()
+
     client.read_request_file('requests.txt')
     client.send_requests()
-    client.save_latency()
+    # client.save_latency()
     client.save_extra()
+   
     # client.get_request_file('requests.txt')

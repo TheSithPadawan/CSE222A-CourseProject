@@ -17,21 +17,14 @@ from requesthandler import (
     LeastLatencyHandler
     )
 
-"""
-main program:
-main thread: accept connection 
-when a connection is accepted, use thread
-to do the work:
-    copy each http request
-    forward to upstream server in a roundrobin fashion 
-"""
-
 class ThreadingSimpleServer(ThreadingMixIn, HTTPServer):
     pass
 
 class LoadBalancerServer():
     HOST_NAME = '155.98.36.127'
     PORT_NUMBER = 50505
+    # PORT_NUMBER = 8080
+    # HOST_NAME = 'localhost'
     REQUESTHANDLER = RandomHandler  # Change Load Balancing Algorithm
 
     def select_handler(self, abbr=None, alls=True):
@@ -47,6 +40,7 @@ class LoadBalancerServer():
             self.REQUESTHANDLER = LeastLatencyHandler
         print(get_timestamp('LoadBalancerServer'), 'uses', str(self.REQUESTHANDLER.__name__))
 
+
     def start_server(self, HOST_NAME=None):
         if HOST_NAME == None:
             HOST_NAME = self.HOST_NAME
@@ -54,9 +48,8 @@ class LoadBalancerServer():
         httpd = ThreadingSimpleServer((HOST_NAME, PORT_NUMBER), self.REQUESTHANDLER)
         try:
             httpd.serve_forever()
-        except KeyboardInterrupt:
-            print('Server Closed')
-            pass
+        finally:
+            REQUESTHANDLER.save_latency()
         httpd.server_close()
 
     def start_healthcheck(self):
@@ -101,6 +94,7 @@ class LoadBalancerServer():
             
             latency = time.time() - ts
             upstream_server_status[serverID].delays.put((round(frequency*cnt,1),latency))
+
         
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Start LoadBalancerServer listening to HTTP requests')
