@@ -49,8 +49,10 @@ class MyHandler(BaseHTTPRequestHandler):
             delay_time = 0
         else:
             delay_time = self.process_request_sigmoid(int(type_args))
-            # delay_time_delta, data = self.dummy_io_job(3-max(int(type_args),3)//10)
-            # delay_time += delay_time_delta
+            # Who knows wtf its reasonable or not
+            io_args = min(int(int(type_args)/160*6), 5)
+            delay_time_delta, data = self.dummy_io_job(io_args)
+            delay_time += delay_time_delta
         return delay_time, data
 
     def respond(self, json_data):

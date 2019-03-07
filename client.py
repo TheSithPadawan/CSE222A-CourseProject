@@ -108,8 +108,6 @@ class Client:
             interval = 1/(len(numOfRequest)+1)
             for i in range(len(self.requests[t])):
                 requestType = self.requests[t][i]
-                if requestType == 'EOF':
-                    print ("sending EOF")
                 endpoint = "http://"+HOST+":"+PORT+"/foo?type="+str(requestType)
                 thread = threading.Thread(target=self.asyn_request, args = (endpoint, interval*(i+1)))
                 thread.start()
@@ -131,7 +129,7 @@ class Client:
             fp.write(' '.join(self.responsecodes))
 
 
-    def get_request_file(self, fn, period=120):
+    def get_request_file(self, fn, period=300):
         self.requestUtil.generate_request_file(fn, period)
 
     def read_request_file(self, fn):
@@ -148,4 +146,4 @@ if __name__ == "__main__":
     client.send_requests()
     client.save_extra()
    
-    # client.get_request_file('requests.txt')
+    client.get_request_file('requests.txt')

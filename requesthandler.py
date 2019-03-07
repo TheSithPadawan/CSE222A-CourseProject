@@ -20,7 +20,7 @@ init_time = time.time()
 
 class RequestHandler(BaseHTTPRequestHandler, ABC):
     connection_count = 0
-    TIME_OUT = 3    
+    TIME_OUT = 4    
     
     def do_GET(self):
         ts = time.time()
@@ -38,6 +38,7 @@ class RequestHandler(BaseHTTPRequestHandler, ABC):
         return
         
     def handle_one(self):
+        ts = time.time()
         RequestHandler.connection_count += 1
         self.num_server = len(upstream_server)
 
@@ -206,10 +207,10 @@ class LeastLatencyHandler(RequestHandler):
     def redirect_request(self, server_id, endpoint):
         ts, latency = upstream_server_status[server_id].delays.get()
         # add estimated avg latency to selected server
-        upstream_server_status[server_id].delays.put((ts, upstream_server_status[server_id].avglatency.get()))
+        # upstream_server_status[server_id].delays.put((ts, upstream_server_status[server_id].avglatency.get()))
+        upstream_server_status[server_id].delays.put((ts, latency+0.5))
         r = requests.get(endpoint, headers=self.headers, timeout=self.TIME_OUT)
         # update estimated avg latency
         upstream_server_status[server_id].avglatency.put(r.json()['delays'])
-        print ('actual delay', r.json()['delays'])
         return r
       
