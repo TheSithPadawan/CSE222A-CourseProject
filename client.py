@@ -4,7 +4,7 @@ import time
 import numpy as np
 from util import get_timestamp
 
-LOCAL = False
+LOCAL = True
 if LOCAL:
     PORT = '8080'
     HOST = '0.0.0.0'

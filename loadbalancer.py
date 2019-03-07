@@ -1,7 +1,7 @@
 import argparse
 import requests
 import threading
-import time
+import sched, time
 from http.server import HTTPServer
 from socketserver import ThreadingMixIn
 from util import (
@@ -24,8 +24,9 @@ class LoadBalancerServer():
     HOST_NAME = '155.98.36.127'
     PORT_NUMBER = 50505
     # PORT_NUMBER = 8080
-    # HOST_NAME = 'localhost'
-    REQUESTHANDLER = RandomHandler  # Change Load Balancing Algorithm
+    # HOST_NAME = '127.0.0.1'
+    REQUESTHANDLER = LeastLatencyHandler # Change Load Balancing Algorithm
+    SCHED = sched.scheduler(time.time, time.sleep)
 
     def select_handler(self, abbr=None, alls=True):
         if abbr == 'ra':
@@ -46,6 +47,7 @@ class LoadBalancerServer():
             HOST_NAME = self.HOST_NAME
         PORT_NUMBER = self.PORT_NUMBER
         httpd = ThreadingSimpleServer((HOST_NAME, PORT_NUMBER), self.REQUESTHANDLER)
+      
         try:
             httpd.serve_forever()
         except:
@@ -93,6 +95,11 @@ class LoadBalancerServer():
             
             delay = time.time() - ts
             upstream_server_status[serverID].delays.put((round(frequency*cnt,1),delay))
+
+    def periodic_reweight(self):
+        self.REQUESTHANDLER.reweight(self.REQUESTHANDLER)
+        self.SCHED.enter(3, 1, self.periodic_reweight)
+        self.SCHED.run()
         
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Start LoadBalancerServer listening to HTTP requests')
@@ -101,7 +108,10 @@ if __name__ == "__main__":
     args = vars(parser.parse_args())
 
     lb = LoadBalancerServer()
+    if str(lb.REQUESTHANDLER.__name__) == 'LeastLatencyHandler':
+        thread = threading.Thread(target=lb.periodic_reweight)
+        thread.start()
     lb.start_healthcheck()
     lb.select_handler(abbr=args['handler'])
     lb.start_server(args['hostname'])    
-            
+   

@@ -26,21 +26,20 @@ class Queue():
         return str(self.data)
 
 class AvgLatency():
-    def __init__(self, size=5):
-        self.latency = Queue(10)
+    def __init__(self):
+        self.latency = []
 
     def put(self, latency):
-        self.latency.put(latency)
+        self.latency.append(latency)
 
     def get(self):
         # return sum(self.latency.data)/self.latency.size
-        return self.exp_Avg(np.array(self.latency.data), self.latency.size)
+        return self.exp_Avg(np.array(self.latency), len(self.latency))
 
     def exp_Avg(self, data, window):
         weights = np.exp(np.linspace(-1., 0., window))
         weights /= weights.sum()
-        arr = np.convolve(data, weights)[:len(data)]
-        return arr[-1]
+        return np.sum(data * weights)
 
 class ServerStatus():
     def __init__(self):
@@ -127,17 +126,16 @@ if __name__ == "__main__":
     change file name for the latency files
     """
     plot_obj = PlotUtil()
-    arr1 = plot_obj.read_from_file('rr_latency.txt')
-    arr2 = plot_obj.read_from_file('ra_latency.txt')
+    arr1 = plot_obj.read_from_file('rr_latency.txt') # ok
+    arr2 = plot_obj.read_from_file('ra_latency.txt') # ok
     arr3 = plot_obj.read_from_file('lc_latency.txt')
-    arr4 = plot_obj.read_from_file('ll_latency.txt')
+    arr4 = plot_obj.read_from_file('ll_latency.txt') # ok
     arr5 = plot_obj.read_from_file('ch_latency.txt')
     data = [(arr1, 'round robin'),
-            (arr2, 'random'),
+           (arr2, 'random'),
             (arr3, 'least connection'),
             (arr4, 'Least Latency'),
             (arr5, 'Chained Round Robin')]
-    # data = [(arr1, 'round robin'), (arr2, 'random'), (arr3, 'least connection')]
     plot_obj.get_cdf(data)
     
 

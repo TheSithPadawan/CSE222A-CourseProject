@@ -141,7 +141,6 @@ if __name__ == "__main__":
     # parser.add_argument('-s', '--sleep', action='store', dest='worker_sleep', help='seconds that worker breaks between work time', default=5, type=int)
     # parser.add_argument('-n', '--worker', action='store', dest='num_worker', help='number of dummy workers that offer the delay', default=7, type=int)
     args = vars(parser.parse_args())
-
     server = MyServer()
     # server.start_worker(args['num_worker'], args['worker_delay'], args['worker_duration'], args['worker_sleep'])
     server.start_server(args['port'], args['hostname'])

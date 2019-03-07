@@ -7,7 +7,8 @@ from http.server import BaseHTTPRequestHandler
 from util import (
     upstream_server, 
     upstream_server_status,
-    get_timestamp
+    get_timestamp,
+    AvgLatency
     )
 from requests.exceptions import (
     ConnectionError,
@@ -15,12 +16,13 @@ from requests.exceptions import (
     ReadTimeout,
     Timeout
     )
+import numpy as np
 
 init_time = time.time()
 
 class RequestHandler(BaseHTTPRequestHandler, ABC):
     connection_count = 0
-    TIME_OUT = 4    
+    TIME_OUT = 4
     
     def do_GET(self):
         ts = time.time()
@@ -41,7 +43,7 @@ class RequestHandler(BaseHTTPRequestHandler, ABC):
         ts = time.time()
         RequestHandler.connection_count += 1
         self.num_server = len(upstream_server)
-
+        
         while self.TIME_OUT > 0:
             try:
                 # select next server based on different implementation
@@ -185,9 +187,10 @@ class LeastLatencyHandler(RequestHandler):
      If servers reply with same timestamp, compare the health check latency
      Add an additional avg latency to the selected server
     """
-    actual_latency = []
-    est_latency = []
+    server_weights = [1/len(upstream_server)]*len(upstream_server)
+    
     def redirect_server_id(self):
+        """
         server_id = 0
         min_latency = 999
         max_ts = 0
@@ -202,15 +205,42 @@ class LeastLatencyHandler(RequestHandler):
                 elif max_ts == ts and min_latency > latency:
                     min_latency = latency
                     server_id = serverID
-        return server_id
+        """
+        # adjust for server weight 
+        for serverID in upstream_server_status.keys():
+            if upstream_server_status[serverID].alive == False:
+                self.server_weights[serverID] = 0
+        elements = [i for i in range(len(upstream_server))]
+        total = sum(self.server_weights)
+        # calibrate the probabilities 
+        for i in range(len(self.server_weights)):
+            self.server_weights[i] /= total
+        selected = np.random.choice(elements, p=self.server_weights)
+        # print (selected)
+        return selected
+    
+    # adjust the server weight based on historic data 
+    def reweight(self):
+        num_server = len(upstream_server)
+        exp_latency = [0]*num_server
+        for i in range(num_server):
+            # get the expected latency per server 
+            exp_latency[i] = upstream_server_status[i].avglatency.get()
+            if exp_latency[i] > 0:
+                self.server_weights[i] = 1/exp_latency[i]
+            else:
+                self.server_weights[i] = 1
+            upstream_server_status[i].avglatency = AvgLatency()
+        # print (self.server_weights)
 
     def redirect_request(self, server_id, endpoint):
-        ts, latency = upstream_server_status[server_id].delays.get()
-        # add estimated avg latency to selected server
-        # upstream_server_status[server_id].delays.put((ts, upstream_server_status[server_id].avglatency.get()))
-        upstream_server_status[server_id].delays.put((ts, latency+0.5))
+        t0 = time.time()
         r = requests.get(endpoint, headers=self.headers, timeout=self.TIME_OUT)
-        # update estimated avg latency
-        upstream_server_status[server_id].avglatency.put(r.json()['delays'])
+        t1 = time.time()
+        delta = t1 - t0
+        upstream_server_status[server_id].avglatency.put(delta)
         return r
-      
+
+ 
+        
+    
