@@ -101,7 +101,14 @@ class PlotUtil():
         colors = ['r', 'g', 'b', 'y', 'c', 'm']
         for i in range(len(arr)):
             data=arr[i][0]
-            n, bins, patches = ax.hist(data, n_bins, normed=1, histtype='step', cumulative=True, label=arr[i][1], color=colors[i])
+            counts, bin_edges = np.histogram(data, bins=n_bins, normed=True)
+            cdf = np.cumsum(counts)
+            # n, bins, patches = ax.hist(data, n_bins, normed=1, histtype='stepfilled', cumulative=True, label=arr[i][1], color=colors[i])
+            ax.plot(bin_edges[1:], cdf/cdf[-1], label=arr[i][1], color=colors[i])
+            print ('statistics for algorithm', arr[i][1])
+            for q in [50, 90, 95, 100]:
+                print ("{} percentile: {}".format (q, np.percentile(data, q)))
+
         ax.grid(True)
         ax.set_title('CDF for Load Balancing Algorithms')
         ax.set_xlabel('response latency (ms)')
@@ -126,16 +133,16 @@ if __name__ == "__main__":
     change file name for the latency files
     """
     plot_obj = PlotUtil()
-    arr1 = plot_obj.read_from_file('rr_latency.txt') # ok
-    arr2 = plot_obj.read_from_file('ra_latency.txt') # ok
-    arr3 = plot_obj.read_from_file('lc_latency.txt')
-    arr4 = plot_obj.read_from_file('ll_latency.txt') # ok
-    arr5 = plot_obj.read_from_file('ch_latency.txt')
+    arr1 = plot_obj.read_from_file('rr_cpu_latency.txt') 
+    arr2 = plot_obj.read_from_file('ra_cpu_latency.txt') 
+    arr3 = plot_obj.read_from_file('lc_cpu_latency.txt')
+    arr4 = plot_obj.read_from_file('ll_cpu_latency.txt') 
+    arr5 = plot_obj.read_from_file('ch_cpu_latency.txt')
     data = [(arr1, 'round robin'),
            (arr2, 'random'),
             (arr3, 'least connection'),
-            (arr4, 'Least Latency'),
-            (arr5, 'Chained Round Robin')]
+            (arr4, 'latency-based'),
+            (arr5, 'chained round robin')]
     plot_obj.get_cdf(data)
     
 
