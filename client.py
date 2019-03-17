@@ -146,4 +146,4 @@ if __name__ == "__main__":
     client.send_requests()
     client.save_extra()
    
-    client.get_request_file('requests.txt')
+    # client.get_request_file('requests.txt')
