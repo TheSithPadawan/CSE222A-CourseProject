@@ -47,6 +47,8 @@ class ServerStatus():
         self.delays = Queue(5)
         self.alive = True
         self.avglatency = AvgLatency()
+        self.num_reqs = 0
+        self.success_reqs = 0
 
 if LOCAL:
     upstream_server = {
@@ -103,7 +105,6 @@ class PlotUtil():
             data=arr[i][0]
             counts, bin_edges = np.histogram(data, bins=n_bins, normed=True)
             cdf = np.cumsum(counts)
-            # n, bins, patches = ax.hist(data, n_bins, normed=1, histtype='stepfilled', cumulative=True, label=arr[i][1], color=colors[i])
             ax.plot(bin_edges[1:], cdf/cdf[-1], label=arr[i][1], color=colors[i])
             print ('statistics for algorithm', arr[i][1])
             for q in [50, 90, 95, 100]:

@@ -183,35 +183,22 @@ class LeastPacketsHandler(RequestHandler):
 
 class LeastLatencyHandler(RequestHandler):
     """
-     Least Latency chooses server which replies the server health check first
-     If servers reply with same timestamp, compare the health check latency
-     Add an additional avg latency to the selected server
+    Our own design: load balance based on expected latency per server
+    - Expected latency is estimated using exponential averaging over history latency (1)
+    - Exp latency per request = base_latency (1) + failure penalty (4ms in our setting) * (1/s - 1)
+    s is the success rate and 1/s is the expected number of tries to get a 200 status code 
+    - We maintain the number of outstanding requests at time t
+    - Total expected latency per server = Exp latency per request * num_outstanding request
+    - Convert the previous number to weight and implements an incremental update per request sent 
     """
     server_weights = [1/len(upstream_server)]*len(upstream_server)
     
     def redirect_server_id(self):
-        """
-        server_id = 0
-        min_latency = 999
-        max_ts = 0
-
-        for serverID in upstream_server_status.keys():
-            if upstream_server_status[serverID].alive ==True:
-                ts, latency = upstream_server_status[serverID].delays.get()
-                if max_ts < ts:
-                    max_ts = ts
-                    min_latency = latency
-                    server_id = serverID
-                elif max_ts == ts and min_latency > latency:
-                    min_latency = latency
-                    server_id = serverID
-        """
         # adjust for server weight 
         for serverID in upstream_server_status.keys():
             if upstream_server_status[serverID].alive == False:
                 self.server_weights[serverID] = 0
         elements = [i for i in range(len(upstream_server))]
-        # calibrate the probabilities
         self.reweight()
         w = np.array(self.server_weights)
         selected = np.random.choice(elements, p=w)
@@ -221,26 +208,34 @@ class LeastLatencyHandler(RequestHandler):
     def reweight(self):
         num_server = len(upstream_server)
         exp_latency = [0]*num_server
-        
         for i in range(num_server):
             # get the expected latency per server 
-            exp_latency[i] = upstream_server_status[i].avglatency.get()
+            latency_base = upstream_server_status[i].avglatency.get()
+            # multiply by current number of outstanding requests
+            # take into account of success rate and failure latency -- which is 4 ms in our case
+            if upstream_server_status[i].num_reqs > 0:
+                s = upstream_server_status[i].success_reqs/upstream_server_status[i].num_reqs
+            else:
+                s = 1
+            fail_latency = 0.4 * (1/s - 1)
+            exp_latency[i] = (latency_base + fail_latency) * upstream_server_status[i].workloads
             if exp_latency[i] > 0:
                 self.server_weights[i] = 1/exp_latency[i]
             else:
                 self.server_weights[i] = 1
-            #upstream_server_status[i].avglatency = AvgLatency()
-      
-        # for i in range(num_server):
-        #    weights.append(1)
+        # calibrate the probabilities 
         total = sum(self.server_weights)
-        # self.server_weights = []
         for i in range(num_server):
             self.server_weights[i] = self.server_weights[i]/total
         
     def redirect_request(self, server_id, endpoint):
         t0 = time.time()
+        upstream_server_status[server_id].workloads += 1
+        upstream_server_status[server_id].num_reqs += 1
         r = requests.get(endpoint, headers=self.headers, timeout=self.TIME_OUT)
+        upstream_server_status[server_id].workloads -= 1
+        if r.status_code == 200:
+            upstream_server_status[server_id].success_reqs += 1
         t1 = time.time()
         delta = t1 - t0
         upstream_server_status[server_id].avglatency.put(delta)
