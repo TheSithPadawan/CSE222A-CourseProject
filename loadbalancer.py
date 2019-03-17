@@ -95,11 +95,6 @@ class LoadBalancerServer():
             
             delay = time.time() - ts
             upstream_server_status[serverID].delays.put((round(frequency*cnt,1),delay))
-
-    def periodic_reweight(self):
-        self.REQUESTHANDLER.reweight(self.REQUESTHANDLER)
-        self.SCHED.enter(3, 1, self.periodic_reweight)
-        self.SCHED.run()
         
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Start LoadBalancerServer listening to HTTP requests')
@@ -108,9 +103,6 @@ if __name__ == "__main__":
     args = vars(parser.parse_args())
 
     lb = LoadBalancerServer()
-    if str(lb.REQUESTHANDLER.__name__) == 'LeastLatencyHandler':
-        thread = threading.Thread(target=lb.periodic_reweight)
-        thread.start()
     lb.start_healthcheck()
     lb.select_handler(abbr=args['handler'])
     lb.start_server(args['hostname'])    

@@ -211,18 +211,17 @@ class LeastLatencyHandler(RequestHandler):
             if upstream_server_status[serverID].alive == False:
                 self.server_weights[serverID] = 0
         elements = [i for i in range(len(upstream_server))]
-        total = sum(self.server_weights)
-        # calibrate the probabilities 
-        for i in range(len(self.server_weights)):
-            self.server_weights[i] /= total
-        selected = np.random.choice(elements, p=self.server_weights)
-        # print (selected)
+        # calibrate the probabilities
+        self.reweight()
+        w = np.array(self.server_weights)
+        selected = np.random.choice(elements, p=w)
         return selected
     
     # adjust the server weight based on historic data 
     def reweight(self):
         num_server = len(upstream_server)
         exp_latency = [0]*num_server
+        
         for i in range(num_server):
             # get the expected latency per server 
             exp_latency[i] = upstream_server_status[i].avglatency.get()
@@ -230,9 +229,15 @@ class LeastLatencyHandler(RequestHandler):
                 self.server_weights[i] = 1/exp_latency[i]
             else:
                 self.server_weights[i] = 1
-            upstream_server_status[i].avglatency = AvgLatency()
-        # print (self.server_weights)
-
+            #upstream_server_status[i].avglatency = AvgLatency()
+      
+        # for i in range(num_server):
+        #    weights.append(1)
+        total = sum(self.server_weights)
+        # self.server_weights = []
+        for i in range(num_server):
+            self.server_weights[i] = self.server_weights[i]/total
+        
     def redirect_request(self, server_id, endpoint):
         t0 = time.time()
         r = requests.get(endpoint, headers=self.headers, timeout=self.TIME_OUT)
@@ -241,6 +246,6 @@ class LeastLatencyHandler(RequestHandler):
         upstream_server_status[server_id].avglatency.put(delta)
         return r
 
- 
+
         
     
