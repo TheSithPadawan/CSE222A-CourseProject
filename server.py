@@ -6,6 +6,7 @@ from socketserver import ThreadingMixIn
 import json
 import time
 import sys
+import os
 import random 
 import argparse
 import requests
@@ -50,9 +51,8 @@ class MyHandler(BaseHTTPRequestHandler):
         else:
             delay_time = self.process_request_sigmoid(int(type_args))
             # Who knows wtf its reasonable or not
-            io_args = min(int(int(type_args)/160*6), 5)
-            delay_time_delta, data = self.dummy_io_job(io_args)
-            delay_time += delay_time_delta
+            # io_args = min(int(int(type_args)/160*6), 5)
+            delay_time += self.dummy_io_job(int(type_args))
         return delay_time, data
 
     def respond(self, json_data):
@@ -101,11 +101,22 @@ class MyHandler(BaseHTTPRequestHandler):
         return time.time()-ts
 
     def dummy_io_job(self, x):
+        repeat = min(x * 10, 1000)
+        delay = self.write_to_file(repeat)
+        return delay
+
+    def write_to_file(self, repeat=1):
         ts = time.time()
-        content = str()
-        for i in range(x):
-            content += requests.get("http://www.google.com").text
-        return time.time()-ts, content
+        base = 'tmp/'
+        fn = str(random.random())[2:12] + '.txt'
+        if not os.path.exists(base):
+            os.makedirs(base)
+        fp = base+fn
+        with open(fp, 'a') as the_file:
+            for i in range(repeat):
+                the_file.write(str(random.random()))
+        os.remove(fp)
+        return round(time.time()-ts,5)
 
 
 class MyServer():
