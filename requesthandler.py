@@ -29,9 +29,8 @@ class RequestHandler(BaseHTTPRequestHandler, ABC):
         time_elapsed = round(ts-init_time, 5)
         
         # redirect requests
-        self.handle_one()
+        delay = self.handle_one()
 
-        delay = round(time.time()-ts, 5)
         # [TODO] starts a new thread write to file?  ~0.0003s
         with open('latency.txt', 'a') as fp:
             fp.write('%s %s' % (time_elapsed, delay))
@@ -70,10 +69,12 @@ class RequestHandler(BaseHTTPRequestHandler, ABC):
 
             self.TIME_OUT -= time.time()-ts
         
+        delay = round(time.time()-ts, 5)
+
         print(get_timestamp('RequestHandler'), 'Sends back 504')
         self.send_response(504)
         self.end_headers()
-        return
+        return delay
 
     @abstractmethod
     def redirect_server_id(self):
