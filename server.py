@@ -46,10 +46,11 @@ class MyHandler(BaseHTTPRequestHandler):
         query_component = dict(qc.split('=') for qc in query.split('&'))
         type_args = query_component['type']
         data = str()
+        delay_time = 0
         if type_args == 'hc':
             delay_time = 0
         else:
-            delay_time = self.process_request_sigmoid(int(type_args))
+            delay_time += self.process_request_sigmoid(int(type_args))
             # Who knows wtf its reasonable or not
             # io_args = min(int(int(type_args)/160*6), 5)
             delay_time += self.dummy_io_job(int(type_args))
