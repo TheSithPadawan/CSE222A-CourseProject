@@ -50,10 +50,11 @@ class RequestHandler(BaseHTTPRequestHandler, ABC):
                 endpoint = upstream_server[server_id]+self.path
                 
                 r = self.redirect_request(server_id, endpoint)
+                delay = round(time.time() -ts, 5)
                 self.send_response(r.status_code)
                 self.end_headers()
                 self.wfile.write(bytes(r.text, 'UTF-8'))
-                return
+                return delay
 
             except Timeout:
                 print(get_timestamp('RequestHandler'), 'TIME_OUT')
@@ -210,10 +211,13 @@ class LeastLatencyHandler(RequestHandler):
         num_server = len(upstream_server)
         exp_latency = [0]*num_server
         for i in range(num_server):
+            if upstream_server_status[i].alive == False:
+                continue
             # get the expected latency per server 
             latency_base = upstream_server_status[i].avglatency.get()
             # multiply by current number of outstanding requests
             # take into account of success rate and failure latency -- which is 4 ms in our case
+            s = 0
             if upstream_server_status[i].num_reqs > 0:
                 s = upstream_server_status[i].success_reqs/upstream_server_status[i].num_reqs
             else:
@@ -232,8 +236,8 @@ class LeastLatencyHandler(RequestHandler):
     def redirect_request(self, server_id, endpoint):
         t0 = time.time()
         upstream_server_status[server_id].workloads += 1
-        upstream_server_status[server_id].num_reqs += 1
         r = requests.get(endpoint, headers=self.headers, timeout=self.TIME_OUT)
+        upstream_server_status[server_id].num_reqs += 1
         upstream_server_status[server_id].workloads -= 1
         if r.status_code == 200:
             upstream_server_status[server_id].success_reqs += 1
