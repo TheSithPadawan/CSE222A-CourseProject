@@ -53,7 +53,8 @@ class RequestHandler(BaseHTTPRequestHandler, ABC):
                 self.send_response(r.status_code)
                 self.end_headers()
                 self.wfile.write(bytes(r.text, 'UTF-8'))
-                return
+                delay = round(time.time()-ts, 5)
+                return delay
 
             except Timeout:
                 print(get_timestamp('RequestHandler'), 'TIME_OUT')
@@ -69,11 +70,11 @@ class RequestHandler(BaseHTTPRequestHandler, ABC):
 
             self.TIME_OUT -= time.time()-ts
         
-        delay = round(time.time()-ts, 5)
 
         print(get_timestamp('RequestHandler'), 'Sends back 504')
         self.send_response(504)
         self.end_headers()
+        delay = round(time.time()-ts, 5)
         return delay
 
     @abstractmethod
@@ -201,8 +202,7 @@ class LeastLatencyHandler(RequestHandler):
                 self.server_weights[serverID] = 0
         elements = [i for i in range(len(upstream_server))]
         self.reweight()
-        w = np.array(self.server_weights)
-        selected = np.random.choice(elements, p=w)
+        selected = np.random.choice(elements, p=self.server_weights)
         return selected
     
     # adjust the server weight based on historic data 
@@ -210,6 +210,8 @@ class LeastLatencyHandler(RequestHandler):
         num_server = len(upstream_server)
         exp_latency = [0]*num_server
         for i in range(num_server):
+            if upstream_server_status[i].alive == False:
+                continue
             # get the expected latency per server 
             latency_base = upstream_server_status[i].avglatency.get()
             # multiply by current number of outstanding requests

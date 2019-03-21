@@ -7,12 +7,17 @@ import json
 import time
 import sys
 import os
+from os import listdir
+from os.path import isfile, join
 import random 
 import argparse
 import requests
 
 # from worker import DummyWorker
 from urllib.parse import urlparse
+
+base = '/users/Impetus/data/'
+onlyfiles = [f for f in listdir(base) if isfile(join(base, f))]
 
 class ThreadingSimpleServer(ThreadingMixIn, HTTPServer):
     pass
@@ -53,7 +58,7 @@ class MyHandler(BaseHTTPRequestHandler):
             delay_time += self.process_request_sigmoid(int(type_args))
             # Who knows wtf its reasonable or not
             # io_args = min(int(int(type_args)/160*6), 5)
-            delay_time += self.dummy_io_job(int(type_args))
+            # delay_time += self.dummy_io_job(int(type_args))
         return delay_time, data
 
     def respond(self, json_data):
@@ -80,6 +85,7 @@ class MyHandler(BaseHTTPRequestHandler):
     def process_request_sigmoid(self, x):
         def customized_sigmoid(x, slope=4):
             # returns a number between 0 - 2
+            x = abs(100-x)*3
             return (x / (1+abs(x)/slope)) / slope + 1
             
         multiplier = customized_sigmoid(x) * 100
@@ -102,8 +108,8 @@ class MyHandler(BaseHTTPRequestHandler):
         return time.time()-ts
 
     def dummy_io_job(self, x):
-        repeat = min(x * 10, 1000)
-        delay = self.write_to_file(repeat)
+        # repeat = min(x * 10, 1000)
+        delay = self.read_random_file(x)
         return delay
 
     def write_to_file(self, repeat=1):
@@ -117,6 +123,24 @@ class MyHandler(BaseHTTPRequestHandler):
             for i in range(repeat):
                 the_file.write(str(random.random()))
         os.remove(fp)
+        return round(time.time()-ts,5)
+
+    # def read_random_file(self, size):
+    #     fn = base+random.choice(onlyfiles)
+    #     ts = time.time()
+    #     with open(fn, 'r', errors='ignore') as content_file:
+    #         size = 10**7*size
+    #         content = content_file.read(size)
+    #     return round(time.time()-ts, 5)
+
+    def read_random_file(self, size):
+        ts = time.time()
+        fn = base + 'dummy_file.txt'
+        with open(fn, 'r', errors='ignore') as content_file:
+            content_file.seek(0,2) # move the cursor to the end of the file
+            file_size = content_file.tell()
+            content_file.seek(random.randint(0,file_size))
+            content = content_file.read(100000*size*2)
         return round(time.time()-ts,5)
 
 

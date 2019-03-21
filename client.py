@@ -4,7 +4,7 @@ import time
 import numpy as np
 from util import get_timestamp
 
-LOCAL = True
+LOCAL = False
 if LOCAL:
     PORT = '8080'
     HOST = '0.0.0.0'
@@ -30,17 +30,17 @@ class RequestUtil():
     A = 50 RPS (amplitude)
     t: current time, measured by second 
     """
-    def get_traffic_pattern(self, t, A = 60, T = 30):
+    def get_traffic_pattern(self, t, A = 200, T = 30):
         pos = t % T
         num_request = A * np.abs(np.sin((t/T) * np.pi))
-        return int(num_request) + 30
+        return int(num_request) + 0
 
     """
     draw a sample request to send from log normal distribution 
     input: mu, sigma from the original gauss distribution 
     output: label of the request to send 
     """
-    def draw_sample(self, mu = 3.4, sigma = 1.):
+    def draw_sample(self, mu = 3.7, sigma = 1.):
 
         s = np.random.lognormal(mu, sigma)
         
@@ -89,7 +89,7 @@ class Client:
         time_elapsed = round(ts-self.init_time, 5)
         print(get_timestamp('Client'), "sends request at time", time_elapsed)
         try:
-            r = requests.get(endpoint)
+            r = requests.get(endpoint, timeout=8)
             self.responsecodes.append(str(r.status_code))
         except:
             print(get_timestamp('Client'), "requests error")
@@ -129,7 +129,7 @@ class Client:
             fp.write(' '.join(self.responsecodes))
 
 
-    def get_request_file(self, fn, period=300):
+    def get_request_file(self, fn, period=60):
         self.requestUtil.generate_request_file(fn, period)
 
     def read_request_file(self, fn):
@@ -142,8 +142,8 @@ class Client:
 if __name__ == "__main__":
     client = Client()
 
-    client.read_request_file('requests.txt')
+    client.read_request_file('requests_60s_hp.txt')
     client.send_requests()
     client.save_extra()
    
-    # client.get_request_file('requests.txt')
+    # client.get_request_file('requests_60s_hp.txt')
