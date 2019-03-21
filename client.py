@@ -2,10 +2,15 @@ import requests
 import threading
 import time
 import numpy as np
-import matplotlib.pyplot as plt 
+from util import get_timestamp
 
-PORT = '8080'
-HOST = '127.0.0.1'
+LOCAL = False
+if LOCAL:
+    PORT = '8080'
+    HOST = '0.0.0.0'
+else:
+    PORT = '50505'
+    HOST = '155.98.36.127'
 
 class RequestUtil():
     """
@@ -25,21 +30,20 @@ class RequestUtil():
     A = 50 RPS (amplitude)
     t: current time, measured by second 
     """
-    def get_traffic_pattern(self, t, A = 30, T = 60):
+    def get_traffic_pattern(self, t, A = 200, T = 30):
         pos = t % T
         num_request = A * np.abs(np.sin((t/T) * np.pi))
-        return int(num_request)
+        return int(num_request) + 0
 
     """
     draw a sample request to send from log normal distribution 
     input: mu, sigma from the original gauss distribution 
     output: label of the request to send 
     """
-    def draw_sample(self, mu = 3.4, sigma = 1.):
-        s = 100
-        while s >= 100:
-            s = np.random.lognormal(mu, sigma)
+    def draw_sample(self, mu = 3.7, sigma = 1.):
 
+        s = np.random.lognormal(mu, sigma)
+        
         if self.debug:
             dist = np.random.lognormal(mu, sigma, 1000)
             count, bins, ignored = plt.hist(s, 100, align='mid')
@@ -48,22 +52,6 @@ class RequestUtil():
             plt.plot(x, pdf, linewidth=2, color='r')
             plt.show()
         return int(s)
-        
-    """
-    process each request given the parameter 
-    this grows in polynomial time
-    """
-    def process_request(self, x):
-        base = 3*x**3 + 2*x**2 + x + 10**5
-        variation = np.random.uniform(0.8, 1.51)
-        final = int(base * variation)
-        dummy = 0
-        start_time = time.time()
-        for i in range(final):
-            dummy += 1
-        end_time = time.time()
-        if self.debug:
-            print ('current request with param', x, 'has been processed for', end_time - start_time,'seconds')
 
     """
     input: generate a request file for sending requests for
@@ -81,40 +69,65 @@ class RequestUtil():
                 cnt += 1
                 fp.write(line)
                 fp.write('\n')
+            # fp.write('EOF\n')
             
 
 
 class Client:
+    init_time = 0
+    requestsent = 0
+    requestfailed = 0
     latency = list()
-    init_time = time.time()
+    requests = list()
+    responsecodes = list()
     requestUtil = RequestUtil(False)
-    requests = []
     
     def asyn_request(self, endpoint, delay_send=0):
         time.sleep(delay_send)
         ts = time.time()
+        self.requestsent += 1
         time_elapsed = round(ts-self.init_time, 5)
-        print(threading.currentThread().getName(), "sends request at time", time_elapsed)
-        r = requests.get(endpoint)
+        print(get_timestamp('Client'), "sends request at time", time_elapsed)
+        try:
+            r = requests.get(endpoint, timeout=8)
+            self.responsecodes.append(str(r.status_code))
+        except:
+            print(get_timestamp('Client'), "requests error")
+            self.requestfailed += 1
+
         self.latency.append((time_elapsed, round(time.time()-ts, 5)))
+        return
 
     def send_requests(self):
-        t = 1
+        t = 0
+        self.init_time =  time.time()
         duration = len(self.requests)
+        threads = list()
         while t < duration:
             numOfRequest = self.requests[t]
             interval = 1/(len(numOfRequest)+1)
             for i in range(len(self.requests[t])):
                 requestType = self.requests[t][i]
                 endpoint = "http://"+HOST+":"+PORT+"/foo?type="+str(requestType)
-                thread = threading.Thread(target=self.asyn_request, args = (endpoint, interval*i))
+                thread = threading.Thread(target=self.asyn_request, args = (endpoint, interval*(i+1)))
                 thread.start()
+                threads.append(thread)
             t += 1
             time.sleep(1)
 
-    def save_latency(self):
-        with open('latency.txt', 'w') as fp:
-            fp.write('\n'.join('%s %s' % x for x in self.latency))
+        for thread in threads:
+            thread.join()
+
+    def save_extra(self):
+        # save supplementary
+        print('writing extras to file')
+        with open('extra.txt', 'w') as fp:
+            fp.write('requests sent:     \t'+str(self.requestsent)+'\n')
+            fp.write('responses received:\t'+str(len(self.responsecodes))+'\n')
+            fp.write('responses timeouts:\t'+str(sum(code == '504' for code in self.responsecodes))+'\n')
+            fp.write('requests failed:   \t'+str(self.requestfailed)+'\n')
+            fp.write(' '.join(self.responsecodes))
+
 
     def get_request_file(self, fn, period=60):
         self.requestUtil.generate_request_file(fn, period)
@@ -128,7 +141,9 @@ class Client:
             
 if __name__ == "__main__":
     client = Client()
-    client.read_request_file('requests.txt')
+
+    client.read_request_file('requests_60s_hp.txt')
     client.send_requests()
-    client.save_latency()
-    # client.get_request_file('requests.txt')
+    client.save_extra()
+   
+    # client.get_request_file('requests_60s_hp.txt')

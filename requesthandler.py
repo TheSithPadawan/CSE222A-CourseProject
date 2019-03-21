@@ -1,38 +1,100 @@
 import random
 import requests
 import threading
+import time
 from abc import ABC, abstractmethod
 from http.server import BaseHTTPRequestHandler
-from util import upstream_server, upstream_server_status
+from util import (
+    upstream_server, 
+    upstream_server_status,
+    get_timestamp,
+    AvgLatency
+    )
+from requests.exceptions import (
+    ConnectionError,
+    ConnectTimeout,
+    ReadTimeout,
+    Timeout
+    )
+import numpy as np
+
+init_time = time.time()
 
 class RequestHandler(BaseHTTPRequestHandler, ABC):
     connection_count = 0
+    TIME_OUT = 4
     
     def do_GET(self):
-        print(threading.currentThread().getName(), "get the request, ready to serve")
+        ts = time.time()
+        time_elapsed = round(ts-init_time, 5)
+        
+        # redirect requests
+        delay = self.handle_one()
+
+        # [TODO] starts a new thread write to file?  ~0.0003s
+        with open('latency.txt', 'a') as fp:
+            fp.write('%s %s' % (time_elapsed, delay))
+            fp.write('\n')
+            fp.flush()
+        return
+        
+    def handle_one(self):
+        ts = time.time()
         RequestHandler.connection_count += 1
         self.num_server = len(upstream_server)
+        
+        while self.TIME_OUT > 0:
+            try:
+                # select next server based on different implementation
+                server_id = self.redirect_server_id()
+                endpoint = upstream_server[server_id]+self.path
+                
+                r = self.redirect_request(server_id, endpoint)
+                self.send_response(r.status_code)
+                self.end_headers()
+                self.wfile.write(bytes(r.text, 'UTF-8'))
+                delay = round(time.time()-ts, 5)
+                return delay
 
-        # select next server bsaed on different implementation
-        server_id = self.redirect_server_id()
+            except Timeout:
+                print(get_timestamp('RequestHandler'), 'TIME_OUT')
+                # when there is an connection time out
+                # send back error code
+                break
 
-        addr = upstream_server[server_id]+self.path
-        # post the request
-        upstream_server_status[server_id].workloads+=1
-        r = requests.get(addr, headers=self.headers)
-        upstream_server_status[server_id].workloads-=1
-        self.send_response(r.status_code)
+            except Exception as e:
+                # when there is an connection error resend request
+                print(get_timestamp('RequestHandler'))
+                print(e, end='\n\n')
+                print('Exception, Retransmission required')
+
+            self.TIME_OUT -= time.time()-ts
+        
+
+        print(get_timestamp('RequestHandler'), 'Sends back 504')
+        self.send_response(504)
         self.end_headers()
-        self.wfile.write(bytes(r.text, 'UTF-8'))
+        delay = round(time.time()-ts, 5)
+        return delay
 
     @abstractmethod
     def redirect_server_id(self):
         pass
 
+    @abstractmethod
+    def redirect_request(self, server_id, endpoint):
+        pass
+
 class RandomHandler(RequestHandler):
-    
-    def redirect_server_id(self):
-        return random.randint(0, self.num_server-1)
+    #handled the server failure     
+    def redirect_server_id(self): 
+        serverID = random.randint(0, self.num_server-1)
+        while (upstream_server_status[serverID].alive ==False):
+            serverID = random.randint(0, self.num_server-1)
+        return serverID    
+
+    def redirect_request(self, server_id, endpoint):
+        return requests.get(endpoint, headers=self.headers, timeout=self.TIME_OUT)
 
 class RoundRobinHandler(RequestHandler):
     """
@@ -45,8 +107,17 @@ class RoundRobinHandler(RequestHandler):
     cnt = 0
 
     def redirect_server_id(self):
-        self.cnt += 1
-        return self.cnt%self.num_server
+        while True:
+            server_id = RoundRobinHandler.cnt % self.num_server
+            RoundRobinHandler.cnt += 1
+            if upstream_server_status[server_id].alive ==False:
+                continue
+            else:
+                break
+        return server_id
+
+    def redirect_request(self, server_id, endpoint):
+        return requests.get(endpoint, headers=self.headers, timeout=self.TIME_OUT)
 
 class LeastConnectionHandler(RequestHandler):
     """
@@ -56,17 +127,26 @@ class LeastConnectionHandler(RequestHandler):
      [RESOURCE] https://docs.citrix.com/en-us/netscaler/12/load-balancing/load-balancing-customizing-algorithms/leastconnection-method.html
     """
 
-
     def redirect_server_id(self):
-        # [TODO]
         server = None
         minimum = None
         for serverID in upstream_server_status.keys():
-            if minimum==None or upstream_server_status[serverID].workloads < minimum:
-                minimum = upstream_server_status[serverID].workloads
-                server = serverID
-
+            if upstream_server_status[serverID].alive ==True:
+                if minimum==None or upstream_server_status[serverID].workloads < minimum :
+                    minimum = upstream_server_status[serverID].workloads
+                    server = serverID
+                    
         return server
+
+    def redirect_request(self, server_id, endpoint):
+        try:
+            upstream_server_status[server_id].workloads += 1
+            r = requests.get(endpoint, headers=self.headers, timeout=self.TIME_OUT)
+            upstream_server_status[server_id].workloads -= 1
+        except (ConnectionError, ConnectTimeout, ReadTimeout) as error:
+            upstream_server_status[server_id].workloads -= 1
+            raise error
+        return r
 
 class ChainedConnectionHandler(RequestHandler):
     """
@@ -80,10 +160,17 @@ class ChainedConnectionHandler(RequestHandler):
     weight =10
 
     def redirect_server_id(self):
-        # [TODO]
-        self.cnt +=1 
-        self.cnt/=self.weight
-        return self.cnt%self.num_server
+        while True:
+            server_id = (ChainedConnectionHandler.cnt // self.weight)%self.num_server
+            ChainedConnectionHandler.cnt += 1
+            if upstream_server_status[server_id].alive ==False:
+                ChainedConnectionHandler.cnt += self.weight
+            else:
+                break
+        return server_id
+
+    def redirect_request(self, server_id, endpoint):
+        return requests.get(endpoint, headers=self.headers, timeout=self.TIME_OUT)
 
 class LeastPacketsHandler(RequestHandler):
     """
@@ -97,17 +184,67 @@ class LeastPacketsHandler(RequestHandler):
         return 0
 
 class LeastLatencyHandler(RequestHandler):
+    """
+    Our own design: load balance based on expected latency per server
+    - Expected latency is estimated using exponential averaging over history latency (1)
+    - Exp latency per request = base_latency (1) + failure penalty (4ms in our setting) * (1/s - 1)
+    s is the success rate and 1/s is the expected number of tries to get a 200 status code 
+    - We maintain the number of outstanding requests at time t
+    - Total expected latency per server = Exp latency per request * num_outstanding request
+    - Convert the previous number to weight and implements an incremental update per request sent 
+    """
+    server_weights = [1/len(upstream_server)]*len(upstream_server)
+    
     def redirect_server_id(self):
-        min_latency_id = 0
-        min_latency = 999
+        # adjust for server weight 
         for serverID in upstream_server_status.keys():
-            latency = upstream_server_status[serverID].delays.get()
-            # print('print(serverID, latency)', serverID, latency)
-            if min_latency > latency:
-                min_latency = latency
-                min_latency_id = serverID
-        # print('min_latency_id', min_latency_id)
-        # [TODO] estimate the latency of each type of request
-        upstream_server_status[min_latency_id].delays.put(min_latency+0.02) # hard code estimate per request
-        # print('LeastLatencyHandler to \t\t\t\t', min_latency_id, '\t\t', round(min_latency,4))
-        return min_latency_id
+            if upstream_server_status[serverID].alive == False:
+                self.server_weights[serverID] = 0
+        elements = [i for i in range(len(upstream_server))]
+        self.reweight()
+        selected = np.random.choice(elements, p=self.server_weights)
+        return selected
+    
+    # adjust the server weight based on historic data 
+    def reweight(self):
+        num_server = len(upstream_server)
+        exp_latency = [0]*num_server
+        for i in range(num_server):
+            if upstream_server_status[i].alive == False:
+                continue
+            # get the expected latency per server 
+            latency_base = upstream_server_status[i].avglatency.get()
+            # multiply by current number of outstanding requests
+            # take into account of success rate and failure latency -- which is 4 ms in our case
+            s = 0
+            if upstream_server_status[i].num_reqs > 0:
+                s = upstream_server_status[i].success_reqs/upstream_server_status[i].num_reqs
+            else:
+                s = 1
+            fail_latency = 0.4 * (1/s - 1)
+            exp_latency[i] = (latency_base + fail_latency) * upstream_server_status[i].workloads
+            if exp_latency[i] > 0:
+                self.server_weights[i] = 1/exp_latency[i]
+            else:
+                self.server_weights[i] = 1
+        # calibrate the probabilities 
+        total = sum(self.server_weights)
+        for i in range(num_server):
+            self.server_weights[i] = self.server_weights[i]/total
+        
+    def redirect_request(self, server_id, endpoint):
+        t0 = time.time()
+        upstream_server_status[server_id].workloads += 1
+        r = requests.get(endpoint, headers=self.headers, timeout=self.TIME_OUT)
+        upstream_server_status[server_id].num_reqs += 1
+        upstream_server_status[server_id].workloads -= 1
+        if r.status_code == 200:
+            upstream_server_status[server_id].success_reqs += 1
+        t1 = time.time()
+        delta = t1 - t0
+        upstream_server_status[server_id].avglatency.put(delta)
+        return r
+
+
+        
+    
