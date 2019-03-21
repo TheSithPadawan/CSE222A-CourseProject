@@ -216,6 +216,7 @@ class LeastLatencyHandler(RequestHandler):
             latency_base = upstream_server_status[i].avglatency.get()
             # multiply by current number of outstanding requests
             # take into account of success rate and failure latency -- which is 4 ms in our case
+            s = 0
             if upstream_server_status[i].num_reqs > 0:
                 s = upstream_server_status[i].success_reqs/upstream_server_status[i].num_reqs
             else:
@@ -234,8 +235,8 @@ class LeastLatencyHandler(RequestHandler):
     def redirect_request(self, server_id, endpoint):
         t0 = time.time()
         upstream_server_status[server_id].workloads += 1
-        upstream_server_status[server_id].num_reqs += 1
         r = requests.get(endpoint, headers=self.headers, timeout=self.TIME_OUT)
+        upstream_server_status[server_id].num_reqs += 1
         upstream_server_status[server_id].workloads -= 1
         if r.status_code == 200:
             upstream_server_status[server_id].success_reqs += 1
